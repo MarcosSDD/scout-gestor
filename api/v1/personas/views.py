@@ -1,0 +1,248 @@
+from django.db.models import Q
+from django.shortcuts import get_object_or_404
+from rest_framework import status
+from rest_framework.generics import GenericAPIView
+from rest_framework.views import APIView
+
+from api.v1.personas.serializers import (
+    AdultoDetailSerializer,
+    AdultoListSerializer,
+    AdultoWriteSerializer,
+    ApoderadoBeneficiarioListSerializer,
+    ApoderadoBeneficiarioWriteSerializer,
+    ApoderadoDetailSerializer,
+    ApoderadoListSerializer,
+    ApoderadoWriteSerializer,
+    BeneficiarioDetailSerializer,
+    BeneficiarioListSerializer,
+    BeneficiarioWriteSerializer,
+    PersonaDetailSerializer,
+    PersonaListSerializer,
+    PersonaWriteSerializer,
+    ValidarRutSerializer,
+)
+from api.v1.responses import success_response
+from personas.models import Adulto, Apoderado, ApoderadoBeneficiario, Beneficiario, Persona
+
+
+class _ListResponseMixin:
+    def _list_response(self, queryset, serializer_class):
+        page = self.paginate_queryset(queryset)
+        if page is not None:
+            serializer = serializer_class(page, many=True)
+            paginated_response = self.get_paginated_response(serializer.data)
+            meta = {
+                "count": paginated_response.data["count"],
+                "next": paginated_response.data["next"],
+                "previous": paginated_response.data["previous"],
+            }
+            return success_response(data=serializer.data, meta=meta)
+
+        serializer = serializer_class(queryset, many=True)
+        return success_response(data=serializer.data)
+
+
+class PersonaListCreateView(_ListResponseMixin, GenericAPIView):
+    def get_queryset(self):
+        queryset = Persona.objects.order_by("apellidos", "nombres")
+
+        estado = self.request.query_params.get("estado")
+        if estado:
+            queryset = queryset.filter(estado=estado)
+
+        search = self.request.query_params.get("search")
+        if search:
+            search = search.strip()
+            queryset = queryset.filter(
+                Q(nombres__icontains=search) | Q(apellidos__icontains=search) | Q(rut__icontains=search)
+            )
+
+        return queryset
+
+    def get(self, request):
+        return self._list_response(self.get_queryset(), PersonaListSerializer)
+
+    def post(self, request):
+        serializer = PersonaWriteSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        instance = serializer.save()
+        payload = PersonaDetailSerializer(instance).data
+        return success_response(data=payload, message="Persona creada", status_code=status.HTTP_201_CREATED)
+
+
+class PersonaRetrieveUpdateView(GenericAPIView):
+    queryset = Persona.objects.order_by("apellidos", "nombres")
+
+    def get(self, request, pk):
+        instance = get_object_or_404(self.get_queryset(), pk=pk)
+        serializer = PersonaDetailSerializer(instance)
+        return success_response(data=serializer.data)
+
+    def patch(self, request, pk):
+        instance = get_object_or_404(self.get_queryset(), pk=pk)
+        serializer = PersonaWriteSerializer(instance, data=request.data, partial=True)
+        serializer.is_valid(raise_exception=True)
+        instance = serializer.save()
+        payload = PersonaDetailSerializer(instance).data
+        return success_response(data=payload, message="Persona actualizada")
+
+
+class ValidarRutView(APIView):
+    def post(self, request):
+        serializer = ValidarRutSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        payload = {
+            "rut": serializer.validated_data["rut"],
+            "valido": True,
+        }
+        return success_response(data=payload, message="RUT valido")
+
+
+class AdultoListCreateView(_ListResponseMixin, GenericAPIView):
+    queryset = Adulto.objects.select_related("persona").order_by("persona__apellidos", "persona__nombres")
+
+    def get(self, request):
+        return self._list_response(self.get_queryset(), AdultoListSerializer)
+
+    def post(self, request):
+        serializer = AdultoWriteSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        instance = serializer.save()
+        payload = AdultoDetailSerializer(instance).data
+        return success_response(data=payload, message="Adulto creado", status_code=status.HTTP_201_CREATED)
+
+
+class AdultoRetrieveUpdateView(GenericAPIView):
+    queryset = Adulto.objects.select_related("persona")
+
+    def get(self, request, pk):
+        instance = get_object_or_404(self.get_queryset(), pk=pk)
+        serializer = AdultoDetailSerializer(instance)
+        return success_response(data=serializer.data)
+
+    def patch(self, request, pk):
+        instance = get_object_or_404(self.get_queryset(), pk=pk)
+        serializer = AdultoWriteSerializer(instance, data=request.data, partial=True)
+        serializer.is_valid(raise_exception=True)
+        instance = serializer.save()
+        payload = AdultoDetailSerializer(instance).data
+        return success_response(data=payload, message="Adulto actualizado")
+
+
+class BeneficiarioListCreateView(_ListResponseMixin, GenericAPIView):
+    queryset = Beneficiario.objects.select_related("persona", "rama_actual", "unidad").order_by(
+        "persona__apellidos",
+        "persona__nombres",
+    )
+
+    def get(self, request):
+        queryset = self.get_queryset()
+
+        unidad_id = request.query_params.get("unidad_id")
+        if unidad_id:
+            queryset = queryset.filter(unidad_id=unidad_id)
+
+        rama_id = request.query_params.get("rama_id")
+        if rama_id:
+            queryset = queryset.filter(rama_actual_id=rama_id)
+
+        return self._list_response(queryset, BeneficiarioListSerializer)
+
+    def post(self, request):
+        serializer = BeneficiarioWriteSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        instance = serializer.save()
+        payload = BeneficiarioDetailSerializer(instance).data
+        return success_response(data=payload, message="Beneficiario creado", status_code=status.HTTP_201_CREATED)
+
+
+class BeneficiarioRetrieveUpdateView(GenericAPIView):
+    queryset = Beneficiario.objects.select_related("persona", "rama_actual", "unidad")
+
+    def get(self, request, pk):
+        instance = get_object_or_404(self.get_queryset(), pk=pk)
+        serializer = BeneficiarioDetailSerializer(instance)
+        return success_response(data=serializer.data)
+
+    def patch(self, request, pk):
+        instance = get_object_or_404(self.get_queryset(), pk=pk)
+        serializer = BeneficiarioWriteSerializer(instance, data=request.data, partial=True)
+        serializer.is_valid(raise_exception=True)
+        instance = serializer.save()
+        payload = BeneficiarioDetailSerializer(instance).data
+        return success_response(data=payload, message="Beneficiario actualizado")
+
+
+class ApoderadoListCreateView(_ListResponseMixin, GenericAPIView):
+    queryset = Apoderado.objects.select_related("persona").order_by("persona__apellidos", "persona__nombres")
+
+    def get(self, request):
+        return self._list_response(self.get_queryset(), ApoderadoListSerializer)
+
+    def post(self, request):
+        serializer = ApoderadoWriteSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        instance = serializer.save()
+        payload = ApoderadoDetailSerializer(instance).data
+        return success_response(data=payload, message="Apoderado creado", status_code=status.HTTP_201_CREATED)
+
+
+class ApoderadoRetrieveUpdateView(GenericAPIView):
+    queryset = Apoderado.objects.select_related("persona")
+
+    def get(self, request, pk):
+        instance = get_object_or_404(self.get_queryset(), pk=pk)
+        serializer = ApoderadoDetailSerializer(instance)
+        return success_response(data=serializer.data)
+
+    def patch(self, request, pk):
+        instance = get_object_or_404(self.get_queryset(), pk=pk)
+        serializer = ApoderadoWriteSerializer(instance, data=request.data, partial=True)
+        serializer.is_valid(raise_exception=True)
+        instance = serializer.save()
+        payload = ApoderadoDetailSerializer(instance).data
+        return success_response(data=payload, message="Apoderado actualizado")
+
+
+class ApoderadoBeneficiarioListCreateView(_ListResponseMixin, GenericAPIView):
+    queryset = ApoderadoBeneficiario.objects.select_related("apoderado__persona", "beneficiario__persona").order_by(
+        "beneficiario__persona__apellidos",
+        "beneficiario__persona__nombres",
+    )
+
+    def get(self, request):
+        queryset = self.get_queryset()
+
+        beneficiario_id = request.query_params.get("beneficiario_id")
+        if beneficiario_id:
+            queryset = queryset.filter(beneficiario_id=beneficiario_id)
+
+        apoderado_id = request.query_params.get("apoderado_id")
+        if apoderado_id:
+            queryset = queryset.filter(apoderado_id=apoderado_id)
+
+        return self._list_response(queryset, ApoderadoBeneficiarioListSerializer)
+
+    def post(self, request):
+        serializer = ApoderadoBeneficiarioWriteSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        instance = serializer.save()
+        payload = ApoderadoBeneficiarioListSerializer(instance).data
+        return success_response(data=payload, message="Relacion creada", status_code=status.HTTP_201_CREATED)
+
+
+class ApoderadoBeneficiarioRetrieveUpdateView(GenericAPIView):
+    queryset = ApoderadoBeneficiario.objects.select_related("apoderado__persona", "beneficiario__persona")
+
+    def get(self, request, pk):
+        instance = get_object_or_404(self.get_queryset(), pk=pk)
+        serializer = ApoderadoBeneficiarioListSerializer(instance)
+        return success_response(data=serializer.data)
+
+    def patch(self, request, pk):
+        instance = get_object_or_404(self.get_queryset(), pk=pk)
+        serializer = ApoderadoBeneficiarioWriteSerializer(instance, data=request.data, partial=True)
+        serializer.is_valid(raise_exception=True)
+        instance = serializer.save()
+        payload = ApoderadoBeneficiarioListSerializer(instance).data
+        return success_response(data=payload, message="Relacion actualizada")

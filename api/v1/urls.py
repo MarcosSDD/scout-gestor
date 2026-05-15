@@ -8,4 +8,7 @@ urlpatterns = [
     path("auth/", include("api.v1.auth.urls")),
     path("catalogos/", include("api.v1.catalogos.urls")),
     path("grupos/", include("api.v1.organizacion.urls")),
+    path("personas/", include("api.v1.personas.urls")),
+    path("unidades/", include("api.v1.unidades.urls")),
+    path("formacion/", include("api.v1.formacion.urls")),
 ]
