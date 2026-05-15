@@ -1,0 +1,54 @@
+import re
+
+from django.core.exceptions import ValidationError
+from django.core.validators import URLValidator
+
+
+RUT_REGEX = re.compile(r"^(\d{7,8})-([\dkK])$")
+LOGO_PATH_REGEX = re.compile(r"^[A-Za-z0-9_./\\-]+$")
+
+
+def normalizar_rut(value: str) -> str:
+    raw = value.replace(".", "").replace(" ", "").upper()
+    if "-" not in raw and len(raw) > 1:
+        raw = f"{raw[:-1]}-{raw[-1]}"
+    return raw
+
+
+def validar_rut(value: str) -> None:
+    rut = normalizar_rut(value)
+    match = RUT_REGEX.match(rut)
+    if not match:
+        raise ValidationError("RUT invalido. Formato esperado: 12345678-5")
+
+    numero, digito = match.groups()
+    reversed_digits = map(int, reversed(numero))
+    factors = [2, 3, 4, 5, 6, 7]
+    total = 0
+    for index, digit in enumerate(reversed_digits):
+        total += digit * factors[index % len(factors)]
+
+    remainder = 11 - (total % 11)
+    expected = "0" if remainder == 11 else "K" if remainder == 10 else str(remainder)
+    if digito.upper() != expected:
+        raise ValidationError("RUT invalido. Digito verificador no coincide")
+
+
+def validar_url_o_ruta_logo(value: str) -> None:
+    if not value:
+        return
+
+    raw_value = value.strip()
+    if raw_value != value:
+        raise ValidationError("La ruta o URL del logo no debe tener espacios al inicio o final")
+
+    if raw_value.startswith(("http://", "https://")):
+        validator = URLValidator(schemes=["http", "https"])
+        validator(raw_value)
+        return
+
+    if "://" in raw_value:
+        raise ValidationError("El logo debe ser una URL http/https o una ruta valida del servidor")
+
+    if not LOGO_PATH_REGEX.fullmatch(raw_value):
+        raise ValidationError("La ruta del logo contiene caracteres no permitidos")
