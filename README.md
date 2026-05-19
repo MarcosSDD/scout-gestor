@@ -3,7 +3,7 @@
 ![Coverage Status](https://img.shields.io/badge/Coverage%20Status-Not%20Configured-lightgrey)
 
 
-Backend en Django para la gestion de grupos scouts en Chile. Este repositorio contiene el modelado y configuracion de admin y base API (`/api/v1/`) para seguir avanzando por etapas co el gentil auspisio  de cualquier colaborador que se pueda integrar.
+Backend en Django para la gestion de grupos scouts en Chile. Este repositorio contiene el modelado y configuracion de admin y base API (`/api/v1/`) para seguir avanzando por etapas con el gentil auspicio  de cualquier colaborador que se pueda integrar.
 
 ## Environment
 
