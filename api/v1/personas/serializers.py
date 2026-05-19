@@ -2,7 +2,7 @@ from django.core.exceptions import ValidationError as DjangoValidationError
 from rest_framework import serializers
 
 from common.validators import normalizar_rut, validar_rut
-from personas.models import Adulto, Apoderado, ApoderadoBeneficiario, Beneficiario, EstadoPersona, Persona
+from personas.models import Adulto, Apoderado, ApoderadoBeneficiario, Beneficiario, EstadoPersona, Persona, RolAdulto
 
 
 class ModelValidationMixin:
@@ -146,6 +146,8 @@ class AdultoWriteSerializer(ModelValidationMixin, serializers.ModelSerializer):
         instance = Adulto(**validated_data)
         self._run_model_validation(instance)
         instance.save()
+        if instance.rol_principal == RolAdulto.APODERADO:
+            Apoderado.objects.get_or_create(persona=instance.persona)
         return instance
 
     def update(self, instance, validated_data):
@@ -153,6 +155,8 @@ class AdultoWriteSerializer(ModelValidationMixin, serializers.ModelSerializer):
             setattr(instance, key, value)
         self._run_model_validation(instance)
         instance.save()
+        if instance.rol_principal == RolAdulto.APODERADO:
+            Apoderado.objects.get_or_create(persona=instance.persona)
         return instance
 
 

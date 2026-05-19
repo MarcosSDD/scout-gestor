@@ -78,6 +78,22 @@ class Adulto(TimeStampedModel):
         if self.certificado_vigencia_hasta < timezone.localdate():
             raise ValidationError({"certificado_vigencia_hasta": "El certificado no puede estar vencido"})
 
+        hoy = timezone.localdate()
+        edad = hoy.year - self.persona.fecha_nacimiento.year
+        if (hoy.month, hoy.day) < (self.persona.fecha_nacimiento.month, self.persona.fecha_nacimiento.day):
+            edad -= 1
+        if edad < 18:
+            raise ValidationError({"persona": "El adulto debe ser mayor o igual a 18 anos"})
+
+        roles_dirigencia = {RolAdulto.GUIA, RolAdulto.DIRIGENTE, RolAdulto.RESP_GRUPO}
+        if self.rol_principal in roles_dirigencia and hasattr(self.persona, "beneficiario"):
+            raise ValidationError({"persona": "Un beneficiario no puede ser registrado como dirigente"})
+
+    def save(self, *args, **kwargs):
+        super().save(*args, **kwargs)
+        if self.rol_principal == RolAdulto.APODERADO:
+            Apoderado.objects.get_or_create(persona=self.persona)
+
     @property
     def certificado_vigente(self) -> bool:
         from django.utils import timezone
@@ -96,6 +112,17 @@ class Apoderado(TimeStampedModel):
 
     def __str__(self) -> str:
         return f"Apoderado: {self.persona}"
+
+    def clean(self) -> None:
+        from django.core.exceptions import ValidationError
+        from django.utils import timezone
+
+        hoy = timezone.localdate()
+        edad = hoy.year - self.persona.fecha_nacimiento.year
+        if (hoy.month, hoy.day) < (self.persona.fecha_nacimiento.month, self.persona.fecha_nacimiento.day):
+            edad -= 1
+        if edad < 18:
+            raise ValidationError({"persona": "El apoderado debe ser mayor o igual a 18 anos"})
 
 
 class Beneficiario(TimeStampedModel):
@@ -123,6 +150,24 @@ class Beneficiario(TimeStampedModel):
 
     def __str__(self) -> str:
         return f"Beneficiario: {self.persona}"
+
+    def clean(self) -> None:
+        from django.core.exceptions import ValidationError
+
+        from catalogos.models import ComposicionPermitida
+
+        if self.unidad_id and self.rama_actual_id and self.unidad.rama_id != self.rama_actual_id:
+            raise ValidationError({"rama_actual": "La rama actual debe coincidir con la rama de la unidad"})
+
+        if self.unidad_id:
+            composicion = self.unidad.composicion_actual()
+            sexo = self.persona.sexo
+
+            if composicion == ComposicionPermitida.SOLO_HOMBRES and sexo != SexoPersona.MASCULINO:
+                raise ValidationError({"persona": "La unidad permite solo beneficiarios hombres"})
+
+            if composicion == ComposicionPermitida.SOLO_MUJERES and sexo != SexoPersona.FEMENINO:
+                raise ValidationError({"persona": "La unidad permite solo beneficiarias mujeres"})
 
 
 class ApoderadoBeneficiario(TimeStampedModel):

@@ -63,6 +63,12 @@ class Subgrupo(TimeStampedModel):
     def __str__(self) -> str:
         return f"{self.nombre} ({self.unidad.nombre})"
 
+    def clean(self) -> None:
+        from django.core.exceptions import ValidationError
+
+        if self.lider_juvenil_id and self.lider_juvenil.unidad_id != self.unidad_id:
+            raise ValidationError({"lider_juvenil": "El lider juvenil debe pertenecer a la misma unidad"})
+
 
 class SubgrupoMiembro(TimeStampedModel):
     subgrupo = models.ForeignKey(Subgrupo, on_delete=models.CASCADE, related_name="miembros")
@@ -80,6 +86,20 @@ class SubgrupoMiembro(TimeStampedModel):
 
     def __str__(self) -> str:
         return f"{self.beneficiario.persona} en {self.subgrupo.nombre}"
+
+    def clean(self) -> None:
+        from django.core.exceptions import ValidationError
+
+        if self.beneficiario.unidad_id != self.subgrupo.unidad_id:
+            raise ValidationError({"beneficiario": "El beneficiario debe pertenecer a la misma unidad del subgrupo"})
+
+        miembro_en_unidad = SubgrupoMiembro.objects.filter(
+            beneficiario_id=self.beneficiario_id,
+            subgrupo__unidad_id=self.subgrupo.unidad_id,
+        ).exclude(pk=self.pk)
+
+        if miembro_en_unidad.exists():
+            raise ValidationError({"beneficiario": "El beneficiario ya pertenece a otro subgrupo de la misma unidad"})
 
 
 class AdultoUnidadRol(TimeStampedModel):

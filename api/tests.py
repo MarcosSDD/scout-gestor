@@ -5,12 +5,13 @@ from rest_framework import status
 from rest_framework.test import APITestCase
 
 from catalogos.models import ComposicionPermitida, Distrito, Rama, Zona
+from formacion.models import AdultoGradoFormacion, GradoFormacion
 from organizacion.models import GrupoScout, TipoGrupo
 from personas.models import Adulto, Apoderado, Beneficiario, Parentesco, Persona, RolAdulto, SexoPersona
 from unidades.models import AdultoUnidadRol, RolAdultoUnidad, Subgrupo, Unidad
 
 
-class Stage0ApiTests(APITestCase):
+class ApiTests(APITestCase):
     def test_health_endpoint_es_publico_y_responde_formato_estandar(self):
         response = self.client.get(reverse("v1:health"))
 
@@ -377,3 +378,777 @@ class GrupoScoutApiTests(APITestCase):
         self.assertEqual(response.data["data"]["minimo_miembros_calculado"], 2)
         self.assertEqual(response.data["data"]["estado_vigencia"], "OBSERVACION")
 
+
+class PersonasUnidadesApiTests(APITestCase):
+    def setUp(self):
+        self.user = get_user_model().objects.create_user(
+            username="stage4user",
+            password="testpass123",
+            email="stage4@scouts.cl",
+        )
+        self.zona, _ = Zona.objects.get_or_create(nombre="Zona Stage 4")
+        self.distrito, _ = Distrito.objects.get_or_create(nombre="Distrito Stage 4", zona=self.zona)
+        self.rama, _ = Rama.objects.get_or_create(
+            nombre="Tropa Stage 4",
+            defaults={
+                "edad_minima": 11,
+                "edad_maxima": 15,
+                "composicion_permitida": ComposicionPermitida.SOLO_HOMBRES,
+                "nomenclatura_subgrupos": "Patrullas",
+                "activa": True,
+            },
+        )
+        self.grupo = GrupoScout.objects.create(
+            nombre_oficial="Grupo Stage 4",
+            distrito=self.distrito,
+            zona=self.zona,
+            tipo_grupo=TipoGrupo.PLURICONFESIONAL,
+            direccion="Dir 123",
+            comuna="Santiago",
+            logo="",
+        )
+        self.unidad = Unidad.objects.create(grupo=self.grupo, rama=self.rama, nombre="Unidad Stage 4")
+
+    def _authenticate(self):
+        login = self.client.post(
+            reverse("v1:auth-token"),
+            {"username": "stage4user", "password": "testpass123"},
+            format="json",
+        )
+        access = login.data["data"]["access"]
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {access}")
+
+    def _persona_payload(self, **kwargs):
+        payload = {
+            "rut": "12.345.678-5",
+            "nombres": "Persona",
+            "apellidos": "Stage4",
+            "fecha_nacimiento": "2000-01-01",
+            "sexo": SexoPersona.MASCULINO,
+            "direccion": "Calle 100",
+            "telefono": "+56911111111",
+            "email": "persona.stage4@scouts.cl",
+            "estado": "ACTIVO",
+        }
+        payload.update(kwargs)
+        return payload
+
+    def test_personas_y_unidades_requieren_autenticacion(self):
+        personas_response = self.client.get(reverse("v1:personas-list"))
+        unidades_response = self.client.get(reverse("v1:unidades-list"))
+
+        self.assertEqual(personas_response.status_code, status.HTTP_401_UNAUTHORIZED)
+        self.assertEqual(unidades_response.status_code, status.HTTP_401_UNAUTHORIZED)
+
+    def test_validar_rut_normaliza_y_confirma(self):
+        self._authenticate()
+
+        response = self.client.post(reverse("v1:personas-validar-rut"), {"rut": "12.345.678-5"}, format="json")
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertTrue(response.data["success"])
+        self.assertEqual(response.data["data"]["rut"], "12345678-5")
+        self.assertTrue(response.data["data"]["valido"])
+
+    def test_persona_create_y_patch(self):
+        self._authenticate()
+
+        create_response = self.client.post(reverse("v1:personas-list"), self._persona_payload(), format="json")
+        self.assertEqual(create_response.status_code, status.HTTP_201_CREATED)
+        persona_id = create_response.data["data"]["id"]
+        self.assertEqual(create_response.data["data"]["rut"], "12345678-5")
+
+        patch_response = self.client.patch(
+            reverse("v1:personas-detail", kwargs={"pk": persona_id}),
+            {"estado": "INACTIVO"},
+            format="json",
+        )
+        self.assertEqual(patch_response.status_code, status.HTTP_200_OK)
+        self.assertEqual(patch_response.data["data"]["estado"], "INACTIVO")
+
+    def test_adulto_create_falla_si_certificado_vencido(self):
+        self._authenticate()
+        persona_response = self.client.post(
+            reverse("v1:personas-list"),
+            self._persona_payload(rut="11.111.111-1", email="adulto.stage4@scouts.cl"),
+            format="json",
+        )
+        persona_id = persona_response.data["data"]["id"]
+
+        response = self.client.post(
+            reverse("v1:adultos-list"),
+            {
+                "persona": persona_id,
+                "rol_principal": RolAdulto.DIRIGENTE,
+                "certificado_inhabilidades": "certificados/test.pdf",
+                "certificado_vigencia_hasta": str(timezone.localdate() - timezone.timedelta(days=1)),
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertFalse(response.data["success"])
+        self.assertIn("certificado_vigencia_hasta", str(response.data["error"]["details"]))
+
+    def test_apoderado_beneficiario_valida_fecha_autorizacion(self):
+        self._authenticate()
+
+        persona_benef_response = self.client.post(
+            reverse("v1:personas-list"),
+            self._persona_payload(rut="22.222.222-2", email="benef.stage4@scouts.cl"),
+            format="json",
+        )
+        persona_benef_id = persona_benef_response.data["data"]["id"]
+        beneficiario_response = self.client.post(
+            reverse("v1:beneficiarios-list"),
+            {
+                "persona": persona_benef_id,
+                "rama_actual": self.rama.id,
+                "unidad": self.unidad.id,
+                "fecha_ingreso": "2024-01-01",
+                "progresion_scout": "",
+            },
+            format="json",
+        )
+        beneficiario_id = beneficiario_response.data["data"]["id"]
+
+        persona_apod_response = self.client.post(
+            reverse("v1:personas-list"),
+            self._persona_payload(rut="33.333.333-3", email="apod.stage4@scouts.cl", sexo=SexoPersona.FEMENINO),
+            format="json",
+        )
+        persona_apod_id = persona_apod_response.data["data"]["id"]
+        apoderado_response = self.client.post(
+            reverse("v1:apoderados-list"),
+            {
+                "persona": persona_apod_id,
+                "es_miembro_comite": False,
+                "rol_comite": "",
+            },
+            format="json",
+        )
+        apoderado_id = apoderado_response.data["data"]["id"]
+
+        response = self.client.post(
+            reverse("v1:apoderados-beneficiarios-list"),
+            {
+                "apoderado": apoderado_id,
+                "beneficiario": beneficiario_id,
+                "parentesco": Parentesco.MADRE,
+                "autoriza_salidas_terreno": True,
+                "fecha_autorizacion": None,
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertFalse(response.data["success"])
+        self.assertIn("fecha_autorizacion", str(response.data["error"]["details"]))
+
+    def test_unidades_adulto_rol_respeta_regla_composicion(self):
+        self._authenticate()
+
+        persona_response = self.client.post(
+            reverse("v1:personas-list"),
+            self._persona_payload(rut="44.444.444-4", email="adulta.stage4@scouts.cl", sexo=SexoPersona.FEMENINO),
+            format="json",
+        )
+        persona_id = persona_response.data["data"]["id"]
+
+        adulto_response = self.client.post(
+            reverse("v1:adultos-list"),
+            {
+                "persona": persona_id,
+                "rol_principal": RolAdulto.GUIA,
+                "certificado_inhabilidades": "certificados/test.pdf",
+                "certificado_vigencia_hasta": str(timezone.localdate() + timezone.timedelta(days=30)),
+            },
+            format="json",
+        )
+        adulto_id = adulto_response.data["data"]["id"]
+
+        response = self.client.post(
+            reverse("v1:unidades-adultos-roles-list"),
+            {
+                "unidad": self.unidad.id,
+                "adulto": adulto_id,
+                "rol": RolAdultoUnidad.ASISTENTE,
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertFalse(response.data["success"])
+
+    def test_subgrupo_y_miembro_crud_base(self):
+        self._authenticate()
+
+        persona_response = self.client.post(
+            reverse("v1:personas-list"),
+            self._persona_payload(rut="55.555.555-5", email="subgrupo.stage4@scouts.cl"),
+            format="json",
+        )
+        persona_id = persona_response.data["data"]["id"]
+        beneficiario_response = self.client.post(
+            reverse("v1:beneficiarios-list"),
+            {
+                "persona": persona_id,
+                "rama_actual": self.rama.id,
+                "unidad": self.unidad.id,
+                "fecha_ingreso": "2024-01-01",
+                "progresion_scout": "",
+            },
+            format="json",
+        )
+        beneficiario_id = beneficiario_response.data["data"]["id"]
+
+        subgrupo_response = self.client.post(
+            reverse("v1:subgrupos-list"),
+            {"nombre": "Patrulla Roja", "unidad": self.unidad.id, "lider_juvenil": beneficiario_id},
+            format="json",
+        )
+        self.assertEqual(subgrupo_response.status_code, status.HTTP_201_CREATED)
+        subgrupo_id = subgrupo_response.data["data"]["id"]
+
+        miembro_response = self.client.post(
+            reverse("v1:subgrupos-miembros-list"),
+            {"subgrupo": subgrupo_id, "beneficiario": beneficiario_id},
+            format="json",
+        )
+        self.assertEqual(miembro_response.status_code, status.HTTP_201_CREATED)
+        self.assertTrue(miembro_response.data["success"])
+
+        listado_response = self.client.get(reverse("v1:subgrupos-miembros-list"), {"subgrupo_id": subgrupo_id})
+        self.assertEqual(listado_response.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(listado_response.data["data"]), 1)
+        self.assertEqual(listado_response.data["data"][0]["beneficiario"], beneficiario_id)
+
+    def test_beneficiario_no_puede_crearse_como_adulto_dirigente(self):
+        self._authenticate()
+
+        persona_response = self.client.post(
+            reverse("v1:personas-list"),
+            self._persona_payload(rut="66.666.666-6", email="ben-dirigente@scouts.cl", fecha_nacimiento="2000-01-01"),
+            format="json",
+        )
+        persona_id = persona_response.data["data"]["id"]
+
+        self.client.post(
+            reverse("v1:beneficiarios-list"),
+            {
+                "persona": persona_id,
+                "rama_actual": self.rama.id,
+                "unidad": self.unidad.id,
+                "fecha_ingreso": "2024-01-01",
+                "progresion_scout": "",
+            },
+            format="json",
+        )
+
+        adulto_response = self.client.post(
+            reverse("v1:adultos-list"),
+            {
+                "persona": persona_id,
+                "rol_principal": RolAdulto.DIRIGENTE,
+                "certificado_inhabilidades": "certificados/test.pdf",
+                "certificado_vigencia_hasta": str(timezone.localdate() + timezone.timedelta(days=30)),
+            },
+            format="json",
+        )
+
+        self.assertEqual(adulto_response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("persona", str(adulto_response.data["error"]["details"]))
+
+    def test_adulto_con_rol_apoderado_crea_apoderado_automaticamente(self):
+        self._authenticate()
+
+        persona_response = self.client.post(
+            reverse("v1:personas-list"),
+            self._persona_payload(rut="77.777.777-7", email="adulto-apoderado@scouts.cl", sexo=SexoPersona.FEMENINO),
+            format="json",
+        )
+        persona_id = persona_response.data["data"]["id"]
+
+        adulto_response = self.client.post(
+            reverse("v1:adultos-list"),
+            {
+                "persona": persona_id,
+                "rol_principal": RolAdulto.APODERADO,
+                "certificado_inhabilidades": "certificados/test.pdf",
+                "certificado_vigencia_hasta": str(timezone.localdate() + timezone.timedelta(days=30)),
+            },
+            format="json",
+        )
+
+        self.assertEqual(adulto_response.status_code, status.HTTP_201_CREATED)
+
+        apoderados_response = self.client.get(reverse("v1:apoderados-list"))
+        self.assertEqual(apoderados_response.status_code, status.HTTP_200_OK)
+        persona_ids = {item["persona"] for item in apoderados_response.data["data"]}
+        self.assertIn(persona_id, persona_ids)
+
+    def test_actualizar_adulto_a_rol_apoderado_lo_agrega_a_listado_apoderados(self):
+        self._authenticate()
+
+        persona_response = self.client.post(
+            reverse("v1:personas-list"),
+            self._persona_payload(rut="88.888.888-8", email="adulto-update-apoderado@scouts.cl"),
+            format="json",
+        )
+        persona_id = persona_response.data["data"]["id"]
+
+        adulto_response = self.client.post(
+            reverse("v1:adultos-list"),
+            {
+                "persona": persona_id,
+                "rol_principal": RolAdulto.DIRIGENTE,
+                "certificado_inhabilidades": "certificados/test.pdf",
+                "certificado_vigencia_hasta": str(timezone.localdate() + timezone.timedelta(days=30)),
+            },
+            format="json",
+        )
+        adulto_id = adulto_response.data["data"]["id"]
+
+        patch_response = self.client.patch(
+            reverse("v1:adultos-detail", kwargs={"pk": adulto_id}),
+            {"rol_principal": RolAdulto.APODERADO},
+            format="json",
+        )
+        self.assertEqual(patch_response.status_code, status.HTTP_200_OK)
+
+        apoderados_response = self.client.get(reverse("v1:apoderados-list"))
+        self.assertEqual(apoderados_response.status_code, status.HTTP_200_OK)
+        persona_ids = {item["persona"] for item in apoderados_response.data["data"]}
+        self.assertIn(persona_id, persona_ids)
+
+
+class EstructuraJerarquiaApiTests(APITestCase):
+    def setUp(self):
+        self.user = get_user_model().objects.create_user(
+            username="stage5user",
+            password="testpass123",
+            email="stage5@scouts.cl",
+        )
+
+        self.zona = Zona.objects.create(nombre="Zona Stage 5")
+        self.distrito = Distrito.objects.create(nombre="Distrito Stage 5", zona=self.zona)
+        self.rama_tropa = Rama.objects.create(
+            nombre="Tropa Stage 5",
+            edad_minima=11,
+            edad_maxima=15,
+            composicion_permitida=ComposicionPermitida.SOLO_HOMBRES,
+            nomenclatura_subgrupos="Patrullas",
+            activa=True,
+        )
+        self.grupo = GrupoScout.objects.create(
+            nombre_oficial="Grupo Stage 5",
+            distrito=self.distrito,
+            zona=self.zona,
+            tipo_grupo=TipoGrupo.PLURICONFESIONAL,
+            direccion="Dir 555",
+            comuna="Santiago",
+            logo="",
+        )
+        self.unidad = Unidad.objects.create(grupo=self.grupo, rama=self.rama_tropa, nombre="Unidad Stage 5")
+        self.unidad_2 = Unidad.objects.create(grupo=self.grupo, rama=self.rama_tropa, nombre="Unidad Stage 5 B")
+
+    def _authenticate(self):
+        login = self.client.post(
+            reverse("v1:auth-token"),
+            {"username": "stage5user", "password": "testpass123"},
+            format="json",
+        )
+        access = login.data["data"]["access"]
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {access}")
+
+    def _crear_persona(self, *, rut, nombres, sexo, fecha_nacimiento, email):
+        return Persona.objects.create(
+            rut=rut,
+            nombres=nombres,
+            apellidos="Stage5",
+            fecha_nacimiento=fecha_nacimiento,
+            sexo=sexo,
+            direccion="Dir",
+            telefono="123",
+            email=email,
+        )
+
+    def test_estructura_requiere_autenticacion(self):
+        response = self.client.get(reverse("v1:grupos-estructura", kwargs={"pk": self.grupo.id}))
+        self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
+
+    def test_beneficiario_falla_si_rama_no_coincide_con_unidad(self):
+        self._authenticate()
+        rama_otra = Rama.objects.create(
+            nombre="Clan Stage 5",
+            edad_minima=17,
+            edad_maxima=21,
+            composicion_permitida=ComposicionPermitida.MIXTA,
+            nomenclatura_subgrupos="Equipos",
+            activa=True,
+        )
+        persona = self._crear_persona(
+            rut="66.666.666-6",
+            nombres="BenRama",
+            sexo=SexoPersona.MASCULINO,
+            fecha_nacimiento="2012-01-01",
+            email="benrama@scouts.cl",
+        )
+
+        response = self.client.post(
+            reverse("v1:beneficiarios-list"),
+            {
+                "persona": persona.id,
+                "rama_actual": rama_otra.id,
+                "unidad": self.unidad.id,
+                "fecha_ingreso": "2024-01-01",
+                "progresion_scout": "",
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("rama_actual", str(response.data["error"]["details"]))
+
+    def test_beneficiario_falla_por_composicion_unidad(self):
+        self._authenticate()
+        persona = self._crear_persona(
+            rut="77.777.777-7",
+            nombres="BenComposicion",
+            sexo=SexoPersona.FEMENINO,
+            fecha_nacimiento="2012-01-01",
+            email="bencomposicion@scouts.cl",
+        )
+
+        response = self.client.post(
+            reverse("v1:beneficiarios-list"),
+            {
+                "persona": persona.id,
+                "rama_actual": self.rama_tropa.id,
+                "unidad": self.unidad.id,
+                "fecha_ingreso": "2024-01-01",
+                "progresion_scout": "",
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("persona", str(response.data["error"]["details"]))
+
+    def test_subgrupo_falla_si_lider_no_pertenece_a_unidad(self):
+        self._authenticate()
+        persona = self._crear_persona(
+            rut="88.888.888-8",
+            nombres="BenLider",
+            sexo=SexoPersona.MASCULINO,
+            fecha_nacimiento="2012-01-01",
+            email="benlider@scouts.cl",
+        )
+        beneficiario = Beneficiario.objects.create(
+            persona=persona,
+            rama_actual=self.rama_tropa,
+            unidad=self.unidad_2,
+            fecha_ingreso="2024-01-01",
+        )
+
+        response = self.client.post(
+            reverse("v1:subgrupos-list"),
+            {
+                "nombre": "Patrulla Error",
+                "unidad": self.unidad.id,
+                "lider_juvenil": beneficiario.id,
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("lider_juvenil", str(response.data["error"]["details"]))
+
+    def test_subgrupo_miembro_falla_si_beneficiario_no_pertenece_unidad(self):
+        self._authenticate()
+        persona_ok = self._crear_persona(
+            rut="11.111.111-1",
+            nombres="BenOk",
+            sexo=SexoPersona.MASCULINO,
+            fecha_nacimiento="2012-01-01",
+            email="benok@scouts.cl",
+        )
+        benef_ok = Beneficiario.objects.create(
+            persona=persona_ok,
+            rama_actual=self.rama_tropa,
+            unidad=self.unidad,
+            fecha_ingreso="2024-01-01",
+        )
+        subgrupo = Subgrupo.objects.create(nombre="Patrulla Azul", unidad=self.unidad, lider_juvenil=benef_ok)
+
+        persona_otro = self._crear_persona(
+            rut="22.222.222-2",
+            nombres="BenOtro",
+            sexo=SexoPersona.MASCULINO,
+            fecha_nacimiento="2012-01-01",
+            email="benotro@scouts.cl",
+        )
+        benef_otro = Beneficiario.objects.create(
+            persona=persona_otro,
+            rama_actual=self.rama_tropa,
+            unidad=self.unidad_2,
+            fecha_ingreso="2024-01-01",
+        )
+
+        response = self.client.post(
+            reverse("v1:subgrupos-miembros-list"),
+            {
+                "subgrupo": subgrupo.id,
+                "beneficiario": benef_otro.id,
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("beneficiario", str(response.data["error"]["details"]))
+
+    def test_subgrupo_miembro_falla_si_ya_esta_en_otro_subgrupo_misma_unidad(self):
+        self._authenticate()
+        persona = self._crear_persona(
+            rut="33.333.333-3",
+            nombres="BenDuplicado",
+            sexo=SexoPersona.MASCULINO,
+            fecha_nacimiento="2012-01-01",
+            email="benduplicado@scouts.cl",
+        )
+        benef = Beneficiario.objects.create(
+            persona=persona,
+            rama_actual=self.rama_tropa,
+            unidad=self.unidad,
+            fecha_ingreso="2024-01-01",
+        )
+        subgrupo_a = Subgrupo.objects.create(nombre="Patrulla A", unidad=self.unidad, lider_juvenil=benef)
+        subgrupo_b = Subgrupo.objects.create(nombre="Patrulla B", unidad=self.unidad)
+        self.client.post(
+            reverse("v1:subgrupos-miembros-list"),
+            {"subgrupo": subgrupo_a.id, "beneficiario": benef.id},
+            format="json",
+        )
+
+        response = self.client.post(
+            reverse("v1:subgrupos-miembros-list"),
+            {"subgrupo": subgrupo_b.id, "beneficiario": benef.id},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("beneficiario", str(response.data["error"]["details"]))
+
+    def test_estructura_devuelve_arbol_y_alerta_etaria_rn05(self):
+        self._authenticate()
+
+        persona_ben = self._crear_persona(
+            rut="44.444.444-4",
+            nombres="BenAlerta",
+            sexo=SexoPersona.MASCULINO,
+            fecha_nacimiento="2005-01-01",
+            email="benalerta@scouts.cl",
+        )
+        beneficiario = Beneficiario.objects.create(
+            persona=persona_ben,
+            rama_actual=self.rama_tropa,
+            unidad=self.unidad,
+            fecha_ingreso="2024-01-01",
+        )
+
+        persona_adulto = self._crear_persona(
+            rut="55.555.555-5",
+            nombres="AdultoTree",
+            sexo=SexoPersona.MASCULINO,
+            fecha_nacimiento="1988-01-01",
+            email="adultotree@scouts.cl",
+        )
+        adulto = Adulto.objects.create(
+            persona=persona_adulto,
+            rol_principal=RolAdulto.DIRIGENTE,
+            certificado_inhabilidades="certificados/test.pdf",
+            certificado_vigencia_hasta=timezone.localdate() + timezone.timedelta(days=30),
+        )
+        AdultoUnidadRol.objects.create(unidad=self.unidad, adulto=adulto, rol=RolAdultoUnidad.ASISTENTE)
+        subgrupo = Subgrupo.objects.create(nombre="Patrulla Tree", unidad=self.unidad, lider_juvenil=beneficiario)
+        self.client.post(
+            reverse("v1:subgrupos-miembros-list"),
+            {"subgrupo": subgrupo.id, "beneficiario": beneficiario.id},
+            format="json",
+        )
+
+        response = self.client.get(reverse("v1:grupos-estructura", kwargs={"pk": self.grupo.id}))
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertTrue(response.data["success"])
+        self.assertEqual(response.data["data"]["id"], self.grupo.id)
+        self.assertGreaterEqual(response.data["data"]["resumen"]["total_unidades"], 2)
+        self.assertEqual(response.data["data"]["resumen"]["total_beneficiarios"], 1)
+        self.assertEqual(response.data["data"]["resumen"]["total_adultos"], 1)
+        self.assertEqual(response.data["data"]["resumen"]["total_subgrupos"], 1)
+        self.assertEqual(response.data["data"]["resumen"]["total_alertas_etarias"], 1)
+
+        ramas = response.data["data"]["ramas"]
+        self.assertGreaterEqual(len(ramas), 1)
+        unidad_payload = ramas[0]["unidades"][0]
+        self.assertIn("beneficiarios", unidad_payload)
+        self.assertEqual(unidad_payload["beneficiarios"][0]["alertas"][0]["code"], "EDAD_FUERA_DE_RANGO")
+
+
+class DashboardApiTests(APITestCase):
+    def setUp(self):
+        self.user = get_user_model().objects.create_user(
+            username="stage6user",
+            password="testpass123",
+            email="stage6@scouts.cl",
+        )
+        self.zona = Zona.objects.create(nombre="Zona Stage 6")
+        self.distrito = Distrito.objects.create(nombre="Distrito Stage 6", zona=self.zona)
+        self.rama = Rama.objects.create(
+            nombre="Rama Stage 6",
+            edad_minima=11,
+            edad_maxima=15,
+            composicion_permitida=ComposicionPermitida.MIXTA,
+            nomenclatura_subgrupos="Patrullas",
+            activa=True,
+        )
+        self.grupo = GrupoScout.objects.create(
+            nombre_oficial="Grupo Stage 6",
+            distrito=self.distrito,
+            zona=self.zona,
+            tipo_grupo=TipoGrupo.PLURICONFESIONAL,
+            direccion="Dir 666",
+            comuna="Santiago",
+            logo="",
+        )
+        self.unidad = Unidad.objects.create(grupo=self.grupo, rama=self.rama, nombre="Unidad Stage 6")
+
+    def _authenticate(self):
+        login = self.client.post(
+            reverse("v1:auth-token"),
+            {"username": "stage6user", "password": "testpass123"},
+            format="json",
+        )
+        access = login.data["data"]["access"]
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {access}")
+
+    def _crear_persona(self, *, rut, nombres, apellidos, fecha_nacimiento, sexo=SexoPersona.MASCULINO, estado="ACTIVO"):
+        return Persona.objects.create(
+            rut=rut,
+            nombres=nombres,
+            apellidos=apellidos,
+            fecha_nacimiento=fecha_nacimiento,
+            sexo=sexo,
+            direccion="Dir",
+            telefono="123",
+            email=f"{rut.replace('.', '').replace('-', '')}@scouts.cl",
+            estado=estado,
+        )
+
+    def test_dashboard_requiere_autenticacion(self):
+        response = self.client.get(reverse("v1:dashboard-grupo", kwargs={"pk": self.grupo.id}))
+        self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
+
+    def test_dashboard_grupo_vacio_devuelve_kpis_en_cero(self):
+        self._authenticate()
+        response = self.client.get(reverse("v1:dashboard-grupo", kwargs={"pk": self.grupo.id}))
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertTrue(response.data["success"])
+        self.assertEqual(response.data["data"]["kpis"]["total_miembros"], 0)
+        self.assertEqual(response.data["data"]["kpis"]["porcentaje_adultos_con_formacion"], 0.0)
+        self.assertEqual(response.data["data"]["kpis"]["porcentaje_beneficiarios_con_apoderado_activo"], 0.0)
+        self.assertEqual(response.data["data"]["alertas"]["cumpleanos_semana"], [])
+
+    def test_dashboard_calcula_kpis_y_cumpleanos_semana(self):
+        self._authenticate()
+        hoy = timezone.localdate()
+
+        persona_b1 = self._crear_persona(
+            rut="10.000.000-8",
+            nombres="Ben",
+            apellidos="DosDias",
+            fecha_nacimiento=hoy.replace(year=hoy.year - 12) + timezone.timedelta(days=2),
+        )
+        ben1 = Beneficiario.objects.create(persona=persona_b1, rama_actual=self.rama, unidad=self.unidad, fecha_ingreso=hoy)
+
+        persona_b2 = self._crear_persona(
+            rut="10.000.001-6",
+            nombres="Ben",
+            apellidos="FueraRango",
+            fecha_nacimiento=hoy.replace(year=hoy.year - 13) + timezone.timedelta(days=10),
+        )
+        ben2 = Beneficiario.objects.create(persona=persona_b2, rama_actual=self.rama, unidad=self.unidad, fecha_ingreso=hoy)
+
+        persona_ap = self._crear_persona(
+            rut="10.000.002-4",
+            nombres="Apo",
+            apellidos="Activo",
+            fecha_nacimiento="1980-01-01",
+            sexo=SexoPersona.FEMENINO,
+        )
+        apoderado = Apoderado.objects.create(persona=persona_ap)
+        self.client.post(
+            reverse("v1:apoderados-beneficiarios-list"),
+            {
+                "apoderado": apoderado.id,
+                "beneficiario": ben1.id,
+                "parentesco": Parentesco.MADRE,
+                "autoriza_salidas_terreno": True,
+                "fecha_autorizacion": str(hoy),
+            },
+            format="json",
+        )
+
+        persona_a1 = self._crear_persona(
+            rut="10.000.003-2",
+            nombres="Adulto",
+            apellidos="TresDias",
+            fecha_nacimiento=hoy.replace(year=hoy.year - 30) + timezone.timedelta(days=3),
+        )
+        adulto1 = Adulto.objects.create(
+            persona=persona_a1,
+            rol_principal=RolAdulto.DIRIGENTE,
+            certificado_inhabilidades="certificados/test.pdf",
+            certificado_vigencia_hasta=hoy + timezone.timedelta(days=30),
+        )
+
+        persona_a2 = self._crear_persona(
+            rut="10.000.004-0",
+            nombres="Adulto",
+            apellidos="SinFormacion",
+            fecha_nacimiento="1988-05-01",
+        )
+        adulto2 = Adulto.objects.create(
+            persona=persona_a2,
+            rol_principal=RolAdulto.DIRIGENTE,
+            certificado_inhabilidades="certificados/test.pdf",
+            certificado_vigencia_hasta=hoy + timezone.timedelta(days=30),
+        )
+
+        AdultoUnidadRol.objects.create(unidad=self.unidad, adulto=adulto1, rol=RolAdultoUnidad.ASISTENTE)
+        AdultoUnidadRol.objects.create(unidad=self.unidad, adulto=adulto2, rol=RolAdultoUnidad.COLABORADOR)
+
+        grado = GradoFormacion.objects.create(nivel="Basico", especialidad="Tropa")
+        AdultoGradoFormacion.objects.create(adulto=adulto1, grado=grado, fecha_obtencion=hoy)
+
+        response = self.client.get(reverse("v1:dashboard-grupo", kwargs={"pk": self.grupo.id}))
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["data"]["kpis"]["total_beneficiarios_activos"], 2)
+        self.assertEqual(response.data["data"]["kpis"]["total_adultos_activos"], 2)
+        self.assertEqual(response.data["data"]["kpis"]["total_miembros"], 4)
+        self.assertEqual(response.data["data"]["kpis"]["adultos_con_formacion"], 1)
+        self.assertEqual(response.data["data"]["kpis"]["porcentaje_adultos_con_formacion"], 50.0)
+        self.assertEqual(response.data["data"]["kpis"]["beneficiarios_con_apoderado_activo"], 1)
+        self.assertEqual(response.data["data"]["kpis"]["porcentaje_beneficiarios_con_apoderado_activo"], 50.0)
+
+        cumpleanos = response.data["data"]["alertas"]["cumpleanos_semana"]
+        self.assertEqual(len(cumpleanos), 2)
+        self.assertEqual(cumpleanos[0]["dias_restantes"], 2)
+        self.assertEqual(cumpleanos[0]["tipo"], "BENEFICIARIO")
+        self.assertEqual(cumpleanos[1]["dias_restantes"], 3)
+        self.assertEqual(cumpleanos[1]["tipo"], "ADULTO")
+
+        tipos = {item["tipo"] for item in cumpleanos}
+        self.assertEqual(tipos, {"BENEFICIARIO", "ADULTO"})

@@ -11,4 +11,5 @@ urlpatterns = [
     path("personas/", include("api.v1.personas.urls")),
     path("unidades/", include("api.v1.unidades.urls")),
     path("formacion/", include("api.v1.formacion.urls")),
+    path("dashboard/", include("api.v1.dashboard.urls")),
 ]

@@ -1,0 +1,863 @@
+{
+  "info": {
+    "name": "Scout Gestor API v1",
+    "description": "Coleccion para probar endpoints API v1 (auth, catalogos, grupos, personas, unidades, estructura y dashboard).",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "base_url",
+      "value": "http://127.0.0.1:8000"
+    },
+    {
+      "key": "username",
+      "value": "stage5user"
+    },
+    {
+      "key": "password",
+      "value": "testpass123"
+    },
+    {
+      "key": "access_token",
+      "value": ""
+    },
+    {
+      "key": "refresh_token",
+      "value": ""
+    },
+    {
+      "key": "grupo_id",
+      "value": "1"
+    },
+    {
+      "key": "zona_id",
+      "value": "1"
+    },
+    {
+      "key": "distrito_id",
+      "value": "1"
+    },
+    {
+      "key": "rama_id",
+      "value": "1"
+    },
+    {
+      "key": "unidad_id",
+      "value": "1"
+    },
+    {
+      "key": "persona_id",
+      "value": "1"
+    },
+    {
+      "key": "adulto_id",
+      "value": "1"
+    },
+    {
+      "key": "beneficiario_id",
+      "value": "1"
+    },
+    {
+      "key": "apoderado_id",
+      "value": "1"
+    },
+    {
+      "key": "subgrupo_id",
+      "value": "1"
+    }
+  ],
+  "item": [
+    {
+      "name": "00 - Health",
+      "item": [
+        {
+          "name": "GET /api/v1/health/",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/v1/health/",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "health",
+                ""
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "01 - Auth",
+      "item": [
+        {
+          "name": "POST /api/v1/auth/token/",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const res = pm.response.json();",
+                  "if (res.success && res.data) {",
+                  "  pm.collectionVariables.set('access_token', res.data.access || '');",
+                  "  pm.collectionVariables.set('refresh_token', res.data.refresh || '');",
+                  "}",
+                  "pm.test('Login OK', function () {",
+                  "  pm.expect(pm.response.code).to.eql(200);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"username\": \"{{username}}\",\n  \"password\": \"{{password}}\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/auth/token/",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "auth",
+                "token",
+                ""
+              ]
+            }
+          }
+        },
+        {
+          "name": "POST /api/v1/auth/token/refresh/",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"refresh\": \"{{refresh_token}}\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/auth/token/refresh/",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "auth",
+                "token",
+                "refresh",
+                ""
+              ]
+            }
+          }
+        },
+        {
+          "name": "GET /api/v1/auth/me/",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/auth/me/",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "auth",
+                "me",
+                ""
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "02 - Catalogos",
+      "item": [
+        {
+          "name": "GET /api/v1/catalogos/zonas/",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/catalogos/zonas/?search=",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "catalogos",
+                "zonas",
+                ""
+              ],
+              "query": [
+                {
+                  "key": "search",
+                  "value": ""
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "GET /api/v1/catalogos/distritos/",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/catalogos/distritos/?zona_id={{zona_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "catalogos",
+                "distritos",
+                ""
+              ],
+              "query": [
+                {
+                  "key": "zona_id",
+                  "value": "{{zona_id}}"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "GET /api/v1/catalogos/ramas/",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/catalogos/ramas/?activa=true",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "catalogos",
+                "ramas",
+                ""
+              ],
+              "query": [
+                {
+                  "key": "activa",
+                  "value": "true"
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "03 - Grupos",
+      "item": [
+        {
+          "name": "GET /api/v1/grupos/",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/grupos/?search=&zona_id=&distrito_id=&estado_vigencia=",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "grupos",
+                ""
+              ],
+              "query": [
+                {
+                  "key": "search",
+                  "value": ""
+                },
+                {
+                  "key": "zona_id",
+                  "value": ""
+                },
+                {
+                  "key": "distrito_id",
+                  "value": ""
+                },
+                {
+                  "key": "estado_vigencia",
+                  "value": ""
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "POST /api/v1/grupos/",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"nombre_oficial\": \"Grupo Postman\",\n  \"zona\": {{zona_id}},\n  \"distrito\": {{distrito_id}},\n  \"tipo_grupo\": \"PLURICONFESIONAL\",\n  \"religion\": \"\",\n  \"estado_vigencia\": \"ACTIVO\",\n  \"direccion\": \"Direccion 123\",\n  \"comuna\": \"Santiago\",\n  \"referencia\": \"Frente a plaza\",\n  \"logo\": \"https://cdn.scouts.cl/logo.png\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/grupos/",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "grupos",
+                ""
+              ]
+            }
+          }
+        },
+        {
+          "name": "GET /api/v1/grupos/{id}/",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/grupos/{{grupo_id}}/",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "grupos",
+                "{{grupo_id}}",
+                ""
+              ]
+            }
+          }
+        },
+        {
+          "name": "PATCH /api/v1/grupos/{id}/",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"logo\": \"/srv/scouts/logos/grupo-postman.png\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/grupos/{{grupo_id}}/",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "grupos",
+                "{{grupo_id}}",
+                ""
+              ]
+            }
+          }
+        },
+        {
+          "name": "POST /api/v1/grupos/{id}/calcular-minimo/",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/grupos/{{grupo_id}}/calcular-minimo/",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "grupos",
+                "{{grupo_id}}",
+                "calcular-minimo",
+                ""
+              ]
+            }
+          }
+        },
+        {
+          "name": "GET /api/v1/grupos/{id}/estructura/",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/grupos/{{grupo_id}}/estructura/",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "grupos",
+                "{{grupo_id}}",
+                "estructura",
+                ""
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "04 - Personas",
+      "item": [
+        {
+          "name": "POST /api/v1/personas/validar-rut/",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"rut\": \"12.345.678-5\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/personas/validar-rut/",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "personas",
+                "validar-rut",
+                ""
+              ]
+            }
+          }
+        },
+        {
+          "name": "POST /api/v1/personas/",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"rut\": \"11.111.111-1\",\n  \"nombres\": \"Persona\",\n  \"apellidos\": \"Postman\",\n  \"fecha_nacimiento\": \"2000-01-01\",\n  \"sexo\": \"M\",\n  \"direccion\": \"Calle 100\",\n  \"telefono\": \"+56911111111\",\n  \"email\": \"persona.postman@scouts.cl\",\n  \"estado\": \"ACTIVO\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/personas/",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "personas",
+                ""
+              ]
+            }
+          }
+        },
+        {
+          "name": "POST /api/v1/personas/adultos/",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"persona\": {{persona_id}},\n  \"rol_principal\": \"DIRIGENTE\",\n  \"certificado_inhabilidades\": \"certificados/test.pdf\",\n  \"certificado_vigencia_hasta\": \"2030-01-01\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/personas/adultos/",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "personas",
+                "adultos",
+                ""
+              ]
+            }
+          }
+        },
+        {
+          "name": "POST /api/v1/personas/beneficiarios/",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"persona\": {{persona_id}},\n  \"rama_actual\": {{rama_id}},\n  \"unidad\": {{unidad_id}},\n  \"fecha_ingreso\": \"2024-01-01\",\n  \"progresion_scout\": \"\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/personas/beneficiarios/",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "personas",
+                "beneficiarios",
+                ""
+              ]
+            }
+          }
+        },
+        {
+          "name": "POST /api/v1/personas/apoderados/",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"persona\": {{persona_id}},\n  \"es_miembro_comite\": false,\n  \"rol_comite\": \"\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/personas/apoderados/",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "personas",
+                "apoderados",
+                ""
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "05 - Unidades",
+      "item": [
+        {
+          "name": "GET /api/v1/unidades/",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/unidades/?grupo_id={{grupo_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "unidades",
+                ""
+              ],
+              "query": [
+                {
+                  "key": "grupo_id",
+                  "value": "{{grupo_id}}"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "POST /api/v1/unidades/",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"grupo\": {{grupo_id}},\n  \"rama\": {{rama_id}},\n  \"nombre\": \"Unidad Postman\",\n  \"tipo_composicion\": \"\",\n  \"estado\": \"ACTIVA\",\n  \"cupo_maximo\": 30\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/unidades/",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "unidades",
+                ""
+              ]
+            }
+          }
+        },
+        {
+          "name": "POST /api/v1/unidades/subgrupos/",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"nombre\": \"Patrulla Postman\",\n  \"unidad\": {{unidad_id}},\n  \"lider_juvenil\": {{beneficiario_id}}\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/unidades/subgrupos/",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "unidades",
+                "subgrupos",
+                ""
+              ]
+            }
+          }
+        },
+        {
+          "name": "POST /api/v1/unidades/subgrupos-miembros/",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"subgrupo\": {{subgrupo_id}},\n  \"beneficiario\": {{beneficiario_id}}\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/unidades/subgrupos-miembros/",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "unidades",
+                "subgrupos-miembros",
+                ""
+              ]
+            }
+          }
+        },
+        {
+          "name": "POST /api/v1/unidades/adultos-roles/",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"unidad\": {{unidad_id}},\n  \"adulto\": {{adulto_id}},\n  \"rol\": \"ASISTENTE\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/unidades/adultos-roles/",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "unidades",
+                "adultos-roles",
+                ""
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "06 - Dashboard",
+      "item": [
+        {
+          "name": "GET /api/v1/dashboard/grupo/{id}/",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/dashboard/grupo/{{grupo_id}}/",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "dashboard",
+                "grupo",
+                "{{grupo_id}}",
+                ""
+              ]
+            }
+          }
+        }
+      ]
+    }
+  ]
+}
