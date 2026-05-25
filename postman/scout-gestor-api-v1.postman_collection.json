@@ -562,6 +562,120 @@
           }
         },
         {
+          "name": "POST /api/v1/personas/ (multipart con foto)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              }
+            ],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "rut",
+                  "value": "13.000.000-2",
+                  "type": "text"
+                },
+                {
+                  "key": "nombres",
+                  "value": "Persona",
+                  "type": "text"
+                },
+                {
+                  "key": "apellidos",
+                  "value": "Con Foto",
+                  "type": "text"
+                },
+                {
+                  "key": "fecha_nacimiento",
+                  "value": "2000-01-01",
+                  "type": "text"
+                },
+                {
+                  "key": "sexo",
+                  "value": "M",
+                  "type": "text"
+                },
+                {
+                  "key": "direccion",
+                  "value": "Calle 100",
+                  "type": "text"
+                },
+                {
+                  "key": "telefono",
+                  "value": "+56911111111",
+                  "type": "text"
+                },
+                {
+                  "key": "email",
+                  "value": "persona.foto@scouts.cl",
+                  "type": "text"
+                },
+                {
+                  "key": "estado",
+                  "value": "ACTIVO",
+                  "type": "text"
+                },
+                {
+                  "key": "foto",
+                  "type": "file",
+                  "src": []
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/personas/",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "personas",
+                ""
+              ]
+            }
+          }
+        },
+        {
+          "name": "PATCH /api/v1/personas/{id}/foto/ (multipart)",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              }
+            ],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "foto",
+                  "type": "file",
+                  "src": []
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/personas/{{persona_id}}/",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "personas",
+                "{{persona_id}}",
+                ""
+              ]
+            }
+          }
+        },
+        {
           "name": "POST /api/v1/personas/adultos/",
           "request": {
             "method": "POST",

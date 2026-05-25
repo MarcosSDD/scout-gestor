@@ -1,8 +1,15 @@
+import shutil
+import tempfile
+from io import BytesIO
+
 from django.utils import timezone
 from django.contrib.auth import get_user_model
+from django.core.files.uploadedfile import SimpleUploadedFile
+from django.test import override_settings
 from django.urls import reverse
 from rest_framework import status
 from rest_framework.test import APITestCase
+from PIL import Image
 
 from catalogos.models import ComposicionPermitida, Distrito, Rama, Zona
 from formacion.models import AdultoGradoFormacion, GradoFormacion
@@ -381,6 +388,12 @@ class GrupoScoutApiTests(APITestCase):
 
 class PersonasUnidadesApiTests(APITestCase):
     def setUp(self):
+        self.media_root = tempfile.mkdtemp()
+        self.override_media = override_settings(MEDIA_ROOT=self.media_root)
+        self.override_media.enable()
+        self.addCleanup(self.override_media.disable)
+        self.addCleanup(shutil.rmtree, self.media_root, ignore_errors=True)
+
         self.user = get_user_model().objects.create_user(
             username="stage4user",
             password="testpass123",
@@ -433,6 +446,13 @@ class PersonasUnidadesApiTests(APITestCase):
         payload.update(kwargs)
         return payload
 
+    def _foto_png(self, name="foto.png"):
+        image = Image.new("RGB", (1, 1), color="white")
+        buffer = BytesIO()
+        image.save(buffer, format="PNG")
+        png_bytes = buffer.getvalue()
+        return SimpleUploadedFile(name, png_bytes, content_type="image/png")
+
     def test_personas_y_unidades_requieren_autenticacion(self):
         personas_response = self.client.get(reverse("v1:personas-list"))
         unidades_response = self.client.get(reverse("v1:unidades-list"))
@@ -465,6 +485,40 @@ class PersonasUnidadesApiTests(APITestCase):
         )
         self.assertEqual(patch_response.status_code, status.HTTP_200_OK)
         self.assertEqual(patch_response.data["data"]["estado"], "INACTIVO")
+
+    def test_persona_create_con_foto(self):
+        self._authenticate()
+        payload = self._persona_payload(foto=self._foto_png())
+
+        response = self.client.post(reverse("v1:personas-list"), payload, format="multipart")
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertTrue(response.data["success"])
+        self.assertIn("personas/fotos/", response.data["data"]["foto"])
+
+    def test_persona_patch_actualiza_foto(self):
+        self._authenticate()
+        create_response = self.client.post(reverse("v1:personas-list"), self._persona_payload(), format="json")
+        persona_id = create_response.data["data"]["id"]
+
+        response = self.client.patch(
+            reverse("v1:personas-detail", kwargs={"pk": persona_id}),
+            {"foto": self._foto_png("foto-actualizada.png")},
+            format="multipart",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertIn("personas/fotos/", response.data["data"]["foto"])
+
+    def test_persona_foto_rechaza_extension_no_permitida(self):
+        self._authenticate()
+        archivo = SimpleUploadedFile("foto.txt", b"no-es-imagen", content_type="text/plain")
+        payload = self._persona_payload(foto=archivo)
+
+        response = self.client.post(reverse("v1:personas-list"), payload, format="multipart")
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("foto", str(response.data["error"]["details"]).lower())
 
     def test_adulto_create_falla_si_certificado_vencido(self):
         self._authenticate()

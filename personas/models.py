@@ -1,7 +1,7 @@
 from django.db import models
 
 from common.models import TimeStampedModel
-from common.validators import normalizar_rut, validar_rut
+from common.validators import normalizar_rut, validar_foto_persona, validar_rut
 
 
 class EstadoPersona(models.TextChoices):
@@ -41,6 +41,7 @@ class Persona(TimeStampedModel):
     direccion = models.CharField(max_length=200)
     telefono = models.CharField(max_length=30)
     email = models.EmailField(blank=True)
+    foto = models.ImageField(upload_to="personas/fotos/", blank=True, null=True, validators=[validar_foto_persona])
     estado = models.CharField(max_length=10, choices=EstadoPersona.choices, default=EstadoPersona.ACTIVO)
 
     class Meta:

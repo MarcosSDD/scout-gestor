@@ -26,6 +26,7 @@ class PersonaListSerializer(serializers.ModelSerializer):
             "estado",
             "telefono",
             "email",
+            "foto",
         )
 
 
@@ -42,6 +43,7 @@ class PersonaDetailSerializer(serializers.ModelSerializer):
             "direccion",
             "telefono",
             "email",
+            "foto",
             "estado",
             "created_at",
             "updated_at",
@@ -60,6 +62,7 @@ class PersonaWriteSerializer(ModelValidationMixin, serializers.ModelSerializer):
             "direccion",
             "telefono",
             "email",
+            "foto",
             "estado",
         )
 

@@ -2,6 +2,7 @@ from django.db.models import Q
 from django.shortcuts import get_object_or_404
 from rest_framework import status
 from rest_framework.generics import GenericAPIView
+from rest_framework.parsers import FormParser, JSONParser, MultiPartParser
 from rest_framework.views import APIView
 
 from api.v1.personas.serializers import (
@@ -43,6 +44,8 @@ class _ListResponseMixin:
 
 
 class PersonaListCreateView(_ListResponseMixin, GenericAPIView):
+    parser_classes = [JSONParser, MultiPartParser, FormParser]
+
     def get_queryset(self):
         queryset = Persona.objects.order_by("apellidos", "nombres")
 
@@ -71,6 +74,7 @@ class PersonaListCreateView(_ListResponseMixin, GenericAPIView):
 
 
 class PersonaRetrieveUpdateView(GenericAPIView):
+    parser_classes = [JSONParser, MultiPartParser, FormParser]
     queryset = Persona.objects.order_by("apellidos", "nombres")
 
     def get(self, request, pk):

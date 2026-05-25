@@ -1,4 +1,5 @@
 import re
+from pathlib import Path
 
 from django.core.exceptions import ValidationError
 from django.core.validators import URLValidator
@@ -6,6 +7,9 @@ from django.core.validators import URLValidator
 
 RUT_REGEX = re.compile(r"^(\d{7,8})-([\dkK])$")
 LOGO_PATH_REGEX = re.compile(r"^[A-Za-z0-9_./\\-]+$")
+PERSONA_FOTO_EXTENSIONS = {".jpg", ".jpeg", ".png", ".webp"}
+PERSONA_FOTO_CONTENT_TYPES = {"image/jpeg", "image/png", "image/webp"}
+PERSONA_FOTO_MAX_SIZE_BYTES = 2 * 1024 * 1024
 
 
 def normalizar_rut(value: str) -> str:
@@ -52,3 +56,20 @@ def validar_url_o_ruta_logo(value: str) -> None:
 
     if not LOGO_PATH_REGEX.fullmatch(raw_value):
         raise ValidationError("La ruta del logo contiene caracteres no permitidos")
+
+
+def validar_foto_persona(value) -> None:
+    if not value:
+        return
+
+    extension = Path(value.name).suffix.lower()
+    if extension not in PERSONA_FOTO_EXTENSIONS:
+        raise ValidationError("La foto debe ser un archivo JPG, PNG o WebP")
+
+    content_type = getattr(value, "content_type", None)
+    if content_type and content_type not in PERSONA_FOTO_CONTENT_TYPES:
+        raise ValidationError("El tipo de archivo de la foto no esta permitido")
+
+    size = getattr(value, "size", None)
+    if size and size > PERSONA_FOTO_MAX_SIZE_BYTES:
+        raise ValidationError("La foto no puede superar 2 MB")

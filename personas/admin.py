@@ -1,5 +1,6 @@
 from django.contrib import admin
 from django.contrib import messages
+from django.utils.html import format_html
 
 from personas.models import Adulto, Apoderado, ApoderadoBeneficiario, Beneficiario, Persona
 
@@ -16,6 +17,14 @@ class PersonaAdmin(admin.ModelAdmin):
     list_display = ("rut", "nombres", "apellidos", "estado", "telefono")
     list_filter = ("estado", "sexo")
     search_fields = ("rut", "nombres", "apellidos", "email")
+    readonly_fields = ("foto_preview",)
+
+    def foto_preview(self, obj):
+        if not obj.foto:
+            return "Sin foto"
+        return format_html('<img src="{}" style="max-height: 120px; max-width: 120px;" />', obj.foto.url)
+
+    foto_preview.short_description = "Vista previa de foto"
 
 
 @admin.register(Adulto)
