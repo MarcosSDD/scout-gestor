@@ -7,10 +7,13 @@ from api.v1.personas.views import (
     ApoderadoBeneficiarioRetrieveUpdateView,
     ApoderadoListCreateView,
     ApoderadoRetrieveUpdateView,
+    AreaDesarrolloListView,
     BeneficiarioListCreateView,
     BeneficiarioRetrieveUpdateView,
     PersonaListCreateView,
     PersonaRetrieveUpdateView,
+    RegistroProgresionScoutListCreateView,
+    RegistroProgresionScoutRetrieveUpdateView,
     ValidarRutView,
 )
 
@@ -22,6 +25,9 @@ urlpatterns = [
     path("adultos/<int:pk>/", AdultoRetrieveUpdateView.as_view(), name="adultos-detail"),
     path("beneficiarios/", BeneficiarioListCreateView.as_view(), name="beneficiarios-list"),
     path("beneficiarios/<int:pk>/", BeneficiarioRetrieveUpdateView.as_view(), name="beneficiarios-detail"),
+    path("areas-desarrollo/", AreaDesarrolloListView.as_view(), name="areas-desarrollo-list"),
+    path("progresiones/", RegistroProgresionScoutListCreateView.as_view(), name="progresiones-list"),
+    path("progresiones/<int:pk>/", RegistroProgresionScoutRetrieveUpdateView.as_view(), name="progresiones-detail"),
     path("apoderados/", ApoderadoListCreateView.as_view(), name="apoderados-list"),
     path("apoderados/<int:pk>/", ApoderadoRetrieveUpdateView.as_view(), name="apoderados-detail"),
     path(

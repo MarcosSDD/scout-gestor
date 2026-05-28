@@ -64,6 +64,14 @@
     {
       "key": "subgrupo_id",
       "value": "1"
+    },
+    {
+      "key": "area_desarrollo_id",
+      "value": "1"
+    },
+    {
+      "key": "progresion_id",
+      "value": "1"
     }
   ],
   "item": [
@@ -724,7 +732,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"persona\": {{persona_id}},\n  \"rama_actual\": {{rama_id}},\n  \"unidad\": {{unidad_id}},\n  \"fecha_ingreso\": \"2024-01-01\",\n  \"progresion_scout\": \"\"\n}"
+              "raw": "{\n  \"persona\": {{persona_id}},\n  \"rama_actual\": {{rama_id}},\n  \"unidad\": {{unidad_id}},\n  \"fecha_ingreso\": \"2024-01-01\"\n}"
             },
             "url": {
               "raw": "{{base_url}}/api/v1/personas/beneficiarios/",
@@ -769,6 +777,130 @@
                 "v1",
                 "personas",
                 "apoderados",
+                ""
+              ]
+            }
+          }
+        }
+        ,
+        {
+          "name": "GET /api/v1/personas/areas-desarrollo/",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/personas/areas-desarrollo/",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "personas",
+                "areas-desarrollo",
+                ""
+              ]
+            }
+          }
+        },
+        {
+          "name": "GET /api/v1/personas/progresiones/",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/personas/progresiones/?beneficiario_id={{beneficiario_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "personas",
+                "progresiones",
+                ""
+              ],
+              "query": [
+                {
+                  "key": "beneficiario_id",
+                  "value": "{{beneficiario_id}}"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "POST /api/v1/personas/progresiones/",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"beneficiario\": {{beneficiario_id}},\n  \"fecha\": \"2026-05-28\",\n  \"tipo\": \"DURANTE_CICLO\",\n  \"texto\": \"Registro periodico de progresion scout.\",\n  \"areas\": [{{area_desarrollo_id}}]\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/personas/progresiones/",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "personas",
+                "progresiones",
+                ""
+              ]
+            }
+          }
+        },
+        {
+          "name": "PATCH /api/v1/personas/progresiones/{id}/",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"tipo\": \"FINAL_CICLO\",\n  \"texto\": \"Cierre de ciclo de progresion scout.\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/personas/progresiones/{{progresion_id}}/",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "personas",
+                "progresiones",
+                "{{progresion_id}}",
                 ""
               ]
             }

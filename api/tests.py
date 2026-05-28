@@ -14,7 +14,18 @@ from PIL import Image
 from catalogos.models import ComposicionPermitida, Distrito, Rama, Zona
 from formacion.models import AdultoGradoFormacion, GradoFormacion
 from organizacion.models import GrupoScout, TipoGrupo
-from personas.models import Adulto, Apoderado, Beneficiario, Parentesco, Persona, RolAdulto, SexoPersona
+from personas.models import (
+    Adulto,
+    Apoderado,
+    AreaDesarrollo,
+    Beneficiario,
+    Parentesco,
+    Persona,
+    RegistroProgresionScout,
+    RolAdulto,
+    SexoPersona,
+    TipoRegistroProgresion,
+)
 from unidades.models import AdultoUnidadRol, RolAdultoUnidad, Subgrupo, Unidad
 
 
@@ -560,7 +571,6 @@ class PersonasUnidadesApiTests(APITestCase):
                 "rama_actual": self.rama.id,
                 "unidad": self.unidad.id,
                 "fecha_ingreso": "2024-01-01",
-                "progresion_scout": "",
             },
             format="json",
         )
@@ -598,6 +608,108 @@ class PersonasUnidadesApiTests(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertFalse(response.data["success"])
         self.assertIn("fecha_autorizacion", str(response.data["error"]["details"]))
+
+    def test_areas_desarrollo_lista_catalogo_base(self):
+        self._authenticate()
+
+        response = self.client.get(reverse("v1:areas-desarrollo-list"))
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        codigos = {item["codigo"] for item in response.data["data"]}
+        self.assertEqual(
+            codigos,
+            {"CORPORALIDAD", "CREATIVIDAD", "CARACTER", "AFECTIVIDAD", "SOCIABILIDAD", "ESPIRITUALIDAD"},
+        )
+
+    def test_progresion_create_y_filtra_por_beneficiario_area_y_tipo(self):
+        self._authenticate()
+        persona_response = self.client.post(
+            reverse("v1:personas-list"),
+            self._persona_payload(rut="99.999.999-9", email="progresion.stage4@scouts.cl"),
+            format="json",
+        )
+        beneficiario_response = self.client.post(
+            reverse("v1:beneficiarios-list"),
+            {
+                "persona": persona_response.data["data"]["id"],
+                "rama_actual": self.rama.id,
+                "unidad": self.unidad.id,
+                "fecha_ingreso": "2024-01-01",
+            },
+            format="json",
+        )
+        beneficiario_id = beneficiario_response.data["data"]["id"]
+        area = AreaDesarrollo.objects.get(codigo="CREATIVIDAD")
+
+        create_response = self.client.post(
+            reverse("v1:progresiones-list"),
+            {
+                "beneficiario": beneficiario_id,
+                "fecha": str(timezone.localdate()),
+                "tipo": TipoRegistroProgresion.DURANTE_CICLO,
+                "texto": "Participa proponiendo soluciones nuevas.",
+                "areas": [area.id],
+            },
+            format="json",
+        )
+
+        self.assertEqual(create_response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(create_response.data["data"]["areas"][0]["codigo"], "CREATIVIDAD")
+
+        list_response = self.client.get(
+            reverse("v1:progresiones-list"),
+            {"beneficiario_id": beneficiario_id, "area_id": area.id, "tipo": TipoRegistroProgresion.DURANTE_CICLO},
+        )
+        self.assertEqual(list_response.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(list_response.data["data"]), 1)
+
+    def test_progresion_requiere_area_y_no_permite_fecha_futura(self):
+        self._authenticate()
+        persona_response = self.client.post(
+            reverse("v1:personas-list"),
+            self._persona_payload(rut="10.000.005-9", email="progresion-error.stage4@scouts.cl"),
+            format="json",
+        )
+        beneficiario_response = self.client.post(
+            reverse("v1:beneficiarios-list"),
+            {
+                "persona": persona_response.data["data"]["id"],
+                "rama_actual": self.rama.id,
+                "unidad": self.unidad.id,
+                "fecha_ingreso": "2024-01-01",
+            },
+            format="json",
+        )
+        beneficiario_id = beneficiario_response.data["data"]["id"]
+
+        sin_area_response = self.client.post(
+            reverse("v1:progresiones-list"),
+            {
+                "beneficiario": beneficiario_id,
+                "fecha": str(timezone.localdate()),
+                "tipo": TipoRegistroProgresion.INICIO_CICLO,
+                "texto": "Inicio de ciclo.",
+                "areas": [],
+            },
+            format="json",
+        )
+        self.assertEqual(sin_area_response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("areas", str(sin_area_response.data["error"]["details"]))
+
+        area = AreaDesarrollo.objects.get(codigo="CARACTER")
+        fecha_futura_response = self.client.post(
+            reverse("v1:progresiones-list"),
+            {
+                "beneficiario": beneficiario_id,
+                "fecha": str(timezone.localdate() + timezone.timedelta(days=1)),
+                "tipo": TipoRegistroProgresion.INICIO_CICLO,
+                "texto": "Inicio de ciclo.",
+                "areas": [area.id],
+            },
+            format="json",
+        )
+        self.assertEqual(fecha_futura_response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("fecha", str(fecha_futura_response.data["error"]["details"]))
 
     def test_unidades_adulto_rol_respeta_regla_composicion(self):
         self._authenticate()
@@ -650,7 +762,6 @@ class PersonasUnidadesApiTests(APITestCase):
                 "rama_actual": self.rama.id,
                 "unidad": self.unidad.id,
                 "fecha_ingreso": "2024-01-01",
-                "progresion_scout": "",
             },
             format="json",
         )
@@ -694,7 +805,6 @@ class PersonasUnidadesApiTests(APITestCase):
                 "rama_actual": self.rama.id,
                 "unidad": self.unidad.id,
                 "fecha_ingreso": "2024-01-01",
-                "progresion_scout": "",
             },
             format="json",
         )
@@ -856,7 +966,6 @@ class EstructuraJerarquiaApiTests(APITestCase):
                 "rama_actual": rama_otra.id,
                 "unidad": self.unidad.id,
                 "fecha_ingreso": "2024-01-01",
-                "progresion_scout": "",
             },
             format="json",
         )
@@ -881,7 +990,6 @@ class EstructuraJerarquiaApiTests(APITestCase):
                 "rama_actual": self.rama_tropa.id,
                 "unidad": self.unidad.id,
                 "fecha_ingreso": "2024-01-01",
-                "progresion_scout": "",
             },
             format="json",
         )

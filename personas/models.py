@@ -32,6 +32,12 @@ class Parentesco(models.TextChoices):
     OTRO = "OTRO", "Otro"
 
 
+class TipoRegistroProgresion(models.TextChoices):
+    INICIO_CICLO = "INICIO_CICLO", "Inicio ciclo"
+    DURANTE_CICLO = "DURANTE_CICLO", "Durante el ciclo"
+    FINAL_CICLO = "FINAL_CICLO", "Final de ciclo"
+
+
 class Persona(TimeStampedModel):
     rut = models.CharField(max_length=12, unique=True, validators=[validar_rut])
     nombres = models.CharField(max_length=120)
@@ -143,7 +149,6 @@ class Beneficiario(TimeStampedModel):
         related_name="beneficiarios",
     )
     fecha_ingreso = models.DateField()
-    progresion_scout = models.TextField(blank=True)
 
     class Meta:
         verbose_name = "Beneficiario"
@@ -169,6 +174,51 @@ class Beneficiario(TimeStampedModel):
 
             if composicion == ComposicionPermitida.SOLO_MUJERES and sexo != SexoPersona.FEMENINO:
                 raise ValidationError({"persona": "La unidad permite solo beneficiarias mujeres"})
+
+
+class AreaDesarrollo(TimeStampedModel):
+    codigo = models.CharField(max_length=30, unique=True)
+    nombre = models.CharField(max_length=80)
+    definicion = models.TextField()
+    personaje_simbolo = models.CharField(max_length=80, blank=True)
+    lema = models.CharField(max_length=80, blank=True)
+
+    class Meta:
+        ordering = ["nombre"]
+        verbose_name = "Area de desarrollo"
+        verbose_name_plural = "Areas de desarrollo"
+
+    def __str__(self) -> str:
+        return self.nombre
+
+
+class RegistroProgresionScout(TimeStampedModel):
+    beneficiario = models.ForeignKey(Beneficiario, on_delete=models.CASCADE, related_name="registros_progresion")
+    fecha = models.DateField()
+    tipo = models.CharField(max_length=20, choices=TipoRegistroProgresion.choices)
+    texto = models.TextField()
+    areas = models.ManyToManyField(AreaDesarrollo, related_name="registros_progresion")
+
+    class Meta:
+        ordering = ["-fecha", "-created_at"]
+        verbose_name = "Registro de progresion scout"
+        verbose_name_plural = "Registros de progresion scout"
+
+    def __str__(self) -> str:
+        return f"{self.beneficiario.persona} - {self.get_tipo_display()} - {self.fecha}"
+
+    def clean(self) -> None:
+        from django.core.exceptions import ValidationError
+        from django.utils import timezone
+
+        if not self.texto or not self.texto.strip():
+            raise ValidationError({"texto": "El texto de progresion es obligatorio"})
+
+        if self.fecha and self.fecha > timezone.localdate():
+            raise ValidationError({"fecha": "La fecha no puede ser futura"})
+
+        if self.beneficiario_id and self.beneficiario.persona.estado != EstadoPersona.ACTIVO:
+            raise ValidationError({"beneficiario": "El beneficiario debe estar activo"})
 
 
 class ApoderadoBeneficiario(TimeStampedModel):

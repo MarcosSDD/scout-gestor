@@ -3,7 +3,7 @@ from django.core.exceptions import ValidationError
 from django.utils import timezone
 
 from catalogos.models import ComposicionPermitida, Rama
-from personas.models import Adulto, Apoderado, Beneficiario, Persona, RolAdulto, SexoPersona
+from personas.models import Adulto, Apoderado, AreaDesarrollo, Beneficiario, Persona, RegistroProgresionScout, RolAdulto, SexoPersona, TipoRegistroProgresion
 
 
 class PersonaModelTests(TestCase):
@@ -122,5 +122,54 @@ class ApoderadoModelTests(TestCase):
         )
         with self.assertRaises(ValidationError):
             adulto.full_clean()
+
+
+class RegistroProgresionScoutModelTests(TestCase):
+    def _beneficiario(self):
+        persona = Persona.objects.create(
+            rut="22345676-2",
+            nombres="Progreso",
+            apellidos="Scout",
+            fecha_nacimiento=timezone.datetime(2012, 1, 1).date(),
+            sexo=SexoPersona.MASCULINO,
+            direccion="Dir",
+            telefono="123",
+            email="progreso-scout@example.com",
+        )
+        rama = Rama.objects.create(
+            nombre="Tropa Progresion",
+            edad_minima=11,
+            edad_maxima=15,
+            composicion_permitida=ComposicionPermitida.MIXTA,
+            nomenclatura_subgrupos="Patrullas",
+        )
+        return Beneficiario.objects.create(persona=persona, rama_actual=rama, fecha_ingreso=timezone.localdate())
+
+    def test_areas_desarrollo_base_existen(self):
+        codigos = set(AreaDesarrollo.objects.values_list("codigo", flat=True))
+        self.assertEqual(
+            codigos,
+            {"CORPORALIDAD", "CREATIVIDAD", "CARACTER", "AFECTIVIDAD", "SOCIABILIDAD", "ESPIRITUALIDAD"},
+        )
+
+    def test_registro_requiere_texto(self):
+        registro = RegistroProgresionScout(
+            beneficiario=self._beneficiario(),
+            fecha=timezone.localdate(),
+            tipo=TipoRegistroProgresion.DURANTE_CICLO,
+            texto="",
+        )
+        with self.assertRaises(ValidationError):
+            registro.full_clean()
+
+    def test_registro_no_permite_fecha_futura(self):
+        registro = RegistroProgresionScout(
+            beneficiario=self._beneficiario(),
+            fecha=timezone.localdate() + timezone.timedelta(days=1),
+            tipo=TipoRegistroProgresion.DURANTE_CICLO,
+            texto="Observacion del periodo",
+        )
+        with self.assertRaises(ValidationError):
+            registro.full_clean()
 
 # Create your tests here.

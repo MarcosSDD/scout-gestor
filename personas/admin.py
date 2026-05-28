@@ -2,7 +2,7 @@ from django.contrib import admin
 from django.contrib import messages
 from django.utils.html import format_html
 
-from personas.models import Adulto, Apoderado, ApoderadoBeneficiario, Beneficiario, Persona
+from personas.models import Adulto, Apoderado, ApoderadoBeneficiario, AreaDesarrollo, Beneficiario, Persona, RegistroProgresionScout
 
 
 class ApoderadoBeneficiarioInline(admin.TabularInline):
@@ -68,5 +68,20 @@ class ApoderadoBeneficiarioAdmin(admin.ModelAdmin):
     list_display = ("apoderado", "beneficiario", "parentesco", "autoriza_salidas_terreno")
     list_filter = ("parentesco", "autoriza_salidas_terreno")
     autocomplete_fields = ("apoderado", "beneficiario")
+
+
+@admin.register(AreaDesarrollo)
+class AreaDesarrolloAdmin(admin.ModelAdmin):
+    list_display = ("codigo", "nombre", "personaje_simbolo", "lema")
+    search_fields = ("codigo", "nombre", "definicion")
+
+
+@admin.register(RegistroProgresionScout)
+class RegistroProgresionScoutAdmin(admin.ModelAdmin):
+    list_display = ("beneficiario", "fecha", "tipo")
+    list_filter = ("tipo", "areas", "fecha")
+    search_fields = ("beneficiario__persona__nombres", "beneficiario__persona__apellidos", "beneficiario__persona__rut", "texto")
+    autocomplete_fields = ("beneficiario",)
+    filter_horizontal = ("areas",)
 
 # Register your models here.

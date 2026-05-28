@@ -1,8 +1,19 @@
 from django.core.exceptions import ValidationError as DjangoValidationError
+from django.utils import timezone
 from rest_framework import serializers
 
 from common.validators import normalizar_rut, validar_rut
-from personas.models import Adulto, Apoderado, ApoderadoBeneficiario, Beneficiario, EstadoPersona, Persona, RolAdulto
+from personas.models import (
+    Adulto,
+    Apoderado,
+    ApoderadoBeneficiario,
+    AreaDesarrollo,
+    Beneficiario,
+    EstadoPersona,
+    Persona,
+    RegistroProgresionScout,
+    RolAdulto,
+)
 
 
 class ModelValidationMixin:
@@ -185,6 +196,7 @@ class BeneficiarioListSerializer(serializers.ModelSerializer):
 
 class BeneficiarioDetailSerializer(serializers.ModelSerializer):
     persona = PersonaDetailSerializer(read_only=True)
+    registros_progresion_recientes = serializers.SerializerMethodField()
 
     class Meta:
         model = Beneficiario
@@ -194,10 +206,14 @@ class BeneficiarioDetailSerializer(serializers.ModelSerializer):
             "rama_actual",
             "unidad",
             "fecha_ingreso",
-            "progresion_scout",
+            "registros_progresion_recientes",
             "created_at",
             "updated_at",
         )
+
+    def get_registros_progresion_recientes(self, obj):
+        registros = obj.registros_progresion.prefetch_related("areas").all()[:5]
+        return RegistroProgresionScoutListSerializer(registros, many=True).data
 
 
 class BeneficiarioWriteSerializer(ModelValidationMixin, serializers.ModelSerializer):
@@ -208,7 +224,6 @@ class BeneficiarioWriteSerializer(ModelValidationMixin, serializers.ModelSeriali
             "rama_actual",
             "unidad",
             "fecha_ingreso",
-            "progresion_scout",
         )
 
     def validate(self, attrs):
@@ -221,6 +236,95 @@ class BeneficiarioWriteSerializer(ModelValidationMixin, serializers.ModelSeriali
         instance = Beneficiario(**validated_data)
         self._run_model_validation(instance)
         instance.save()
+        return instance
+
+
+class AreaDesarrolloSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = AreaDesarrollo
+        fields = (
+            "id",
+            "codigo",
+            "nombre",
+            "definicion",
+            "personaje_simbolo",
+            "lema",
+        )
+
+
+class RegistroProgresionScoutListSerializer(serializers.ModelSerializer):
+    beneficiario_persona_nombre = serializers.SerializerMethodField()
+    areas = AreaDesarrolloSerializer(many=True, read_only=True)
+
+    class Meta:
+        model = RegistroProgresionScout
+        fields = (
+            "id",
+            "beneficiario",
+            "beneficiario_persona_nombre",
+            "fecha",
+            "tipo",
+            "texto",
+            "areas",
+            "created_at",
+            "updated_at",
+        )
+
+    def get_beneficiario_persona_nombre(self, obj):
+        return f"{obj.beneficiario.persona.nombres} {obj.beneficiario.persona.apellidos}"
+
+
+class RegistroProgresionScoutWriteSerializer(ModelValidationMixin, serializers.ModelSerializer):
+    areas = serializers.PrimaryKeyRelatedField(queryset=AreaDesarrollo.objects.all(), many=True)
+
+    class Meta:
+        model = RegistroProgresionScout
+        fields = (
+            "beneficiario",
+            "fecha",
+            "tipo",
+            "texto",
+            "areas",
+        )
+
+    def validate(self, attrs):
+        areas = attrs.get("areas")
+        if self.instance is None and not areas:
+            raise serializers.ValidationError({"areas": "Debe seleccionar al menos un area de desarrollo"})
+        if self.instance is not None and "areas" in attrs and not areas:
+            raise serializers.ValidationError({"areas": "Debe seleccionar al menos un area de desarrollo"})
+
+        fecha = attrs.get("fecha", getattr(self.instance, "fecha", None))
+        if fecha and fecha > timezone.localdate():
+            raise serializers.ValidationError({"fecha": "La fecha no puede ser futura"})
+
+        candidate_data = attrs.copy()
+        candidate_data.pop("areas", None)
+        if self.instance is None:
+            candidate = RegistroProgresionScout(**candidate_data)
+        else:
+            candidate = self.instance
+            for key, value in candidate_data.items():
+                setattr(candidate, key, value)
+        self._run_model_validation(candidate)
+        return attrs
+
+    def create(self, validated_data):
+        areas = validated_data.pop("areas")
+        instance = RegistroProgresionScout(**validated_data)
+        self._run_model_validation(instance)
+        instance.save()
+        instance.areas.set(areas)
+        return instance
+
+    def update(self, instance, validated_data):
+        areas = validated_data.pop("areas", None)
+        for key, value in validated_data.items():
+            setattr(instance, key, value)
+        self._run_model_validation(instance)
+        instance.save()
+        if areas is not None:
+            instance.areas.set(areas)
         return instance
 
     def update(self, instance, validated_data):

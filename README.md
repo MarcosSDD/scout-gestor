@@ -65,6 +65,29 @@ Rutas utiles:
 - Admin: `http://127.0.0.1:8000/admin/`
 - API health: `http://127.0.0.1:8000/api/v1/health/`
 
+## Como correr con Docker
+
+El `docker-compose.yml` levanta la API Django y un PostgreSQL local. El servicio web ejecuta migraciones y `seed_catalogos` antes de iniciar el servidor.
+
+```bash
+docker compose up --build
+```
+
+Rutas utiles:
+
+- Admin: `http://127.0.0.1:8000/admin/`
+- API health: `http://127.0.0.1:8000/api/v1/health/`
+
+Comandos frecuentes:
+
+```bash
+docker compose run --rm web python manage.py test
+docker compose run --rm web python manage.py createsuperuser
+docker compose down -v
+```
+
+Dentro de Docker, Django usa PostgreSQL porque `POSTGRES_DB` esta definido y `POSTGRES_HOST=db` apunta al contenedor de base de datos. PostgreSQL no publica `5432` al host para evitar conflictos con instalaciones locales.
+
 ## Como correr los tests
 
 Suite completa:

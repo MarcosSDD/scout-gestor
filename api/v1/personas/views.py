@@ -14,16 +14,19 @@ from api.v1.personas.serializers import (
     ApoderadoDetailSerializer,
     ApoderadoListSerializer,
     ApoderadoWriteSerializer,
+    AreaDesarrolloSerializer,
     BeneficiarioDetailSerializer,
     BeneficiarioListSerializer,
     BeneficiarioWriteSerializer,
     PersonaDetailSerializer,
     PersonaListSerializer,
     PersonaWriteSerializer,
+    RegistroProgresionScoutListSerializer,
+    RegistroProgresionScoutWriteSerializer,
     ValidarRutSerializer,
 )
 from api.v1.responses import success_response
-from personas.models import Adulto, Apoderado, ApoderadoBeneficiario, Beneficiario, Persona
+from personas.models import Adulto, Apoderado, ApoderadoBeneficiario, AreaDesarrollo, Beneficiario, Persona, RegistroProgresionScout
 
 
 class _ListResponseMixin:
@@ -161,7 +164,9 @@ class BeneficiarioListCreateView(_ListResponseMixin, GenericAPIView):
 
 
 class BeneficiarioRetrieveUpdateView(GenericAPIView):
-    queryset = Beneficiario.objects.select_related("persona", "rama_actual", "unidad")
+    queryset = Beneficiario.objects.select_related("persona", "rama_actual", "unidad").prefetch_related(
+        "registros_progresion__areas"
+    )
 
     def get(self, request, pk):
         instance = get_object_or_404(self.get_queryset(), pk=pk)
@@ -175,6 +180,66 @@ class BeneficiarioRetrieveUpdateView(GenericAPIView):
         instance = serializer.save()
         payload = BeneficiarioDetailSerializer(instance).data
         return success_response(data=payload, message="Beneficiario actualizado")
+
+
+class AreaDesarrolloListView(_ListResponseMixin, GenericAPIView):
+    queryset = AreaDesarrollo.objects.order_by("nombre")
+
+    def get(self, request):
+        return self._list_response(self.get_queryset(), AreaDesarrolloSerializer)
+
+
+class RegistroProgresionScoutListCreateView(_ListResponseMixin, GenericAPIView):
+    queryset = RegistroProgresionScout.objects.select_related("beneficiario__persona").prefetch_related("areas")
+
+    def get(self, request):
+        queryset = self.get_queryset()
+
+        beneficiario_id = request.query_params.get("beneficiario_id")
+        if beneficiario_id:
+            queryset = queryset.filter(beneficiario_id=beneficiario_id)
+
+        area_id = request.query_params.get("area_id")
+        if area_id:
+            queryset = queryset.filter(areas__id=area_id)
+
+        tipo = request.query_params.get("tipo")
+        if tipo:
+            queryset = queryset.filter(tipo=tipo)
+
+        fecha_desde = request.query_params.get("fecha_desde")
+        if fecha_desde:
+            queryset = queryset.filter(fecha__gte=fecha_desde)
+
+        fecha_hasta = request.query_params.get("fecha_hasta")
+        if fecha_hasta:
+            queryset = queryset.filter(fecha__lte=fecha_hasta)
+
+        return self._list_response(queryset.distinct(), RegistroProgresionScoutListSerializer)
+
+    def post(self, request):
+        serializer = RegistroProgresionScoutWriteSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        instance = serializer.save()
+        payload = RegistroProgresionScoutListSerializer(instance).data
+        return success_response(data=payload, message="Registro de progresion creado", status_code=status.HTTP_201_CREATED)
+
+
+class RegistroProgresionScoutRetrieveUpdateView(GenericAPIView):
+    queryset = RegistroProgresionScout.objects.select_related("beneficiario__persona").prefetch_related("areas")
+
+    def get(self, request, pk):
+        instance = get_object_or_404(self.get_queryset(), pk=pk)
+        serializer = RegistroProgresionScoutListSerializer(instance)
+        return success_response(data=serializer.data)
+
+    def patch(self, request, pk):
+        instance = get_object_or_404(self.get_queryset(), pk=pk)
+        serializer = RegistroProgresionScoutWriteSerializer(instance, data=request.data, partial=True)
+        serializer.is_valid(raise_exception=True)
+        instance = serializer.save()
+        payload = RegistroProgresionScoutListSerializer(instance).data
+        return success_response(data=payload, message="Registro de progresion actualizado")
 
 
 class ApoderadoListCreateView(_ListResponseMixin, GenericAPIView):
