@@ -7,7 +7,7 @@ function App() {
     <main style={{ padding: '24px' }}>
       <h1>SCOUTS-GESTOR</h1>
 
-      {isLoading && <p role="status">Conectndo con API...</p>}
+      {isLoading && <p role="status">Conectando con API...</p>}
 
       {isError && (
         <p role="alert">
