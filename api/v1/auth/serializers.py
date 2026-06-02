@@ -2,8 +2,15 @@ from rest_framework import serializers
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer, TokenRefreshSerializer
 from rest_framework_simplejwt.tokens import RefreshToken, TokenError
 
+from api.v1.access import get_responsable_grupo_ids, get_unidad_roles, get_user_persona
+
 
 def serialize_user(user):
+    persona = get_user_persona(user)
+    unidad_roles = []
+    if persona and hasattr(persona, "adulto"):
+        unidad_roles = list(get_unidad_roles(user).values("unidad_id", "rol"))
+
     return {
         "id": user.id,
         "username": user.username,
@@ -12,6 +19,10 @@ def serialize_user(user):
         "last_name": user.last_name,
         "is_staff": user.is_staff,
         "is_superuser": user.is_superuser,
+        "persona_id": persona.id if persona else None,
+        "responsable_grupo_ids": get_responsable_grupo_ids(user),
+        "unidad_roles": unidad_roles,
+        "is_apoderado": bool(persona and hasattr(persona, "apoderado")),
     }
 
 
@@ -51,3 +62,7 @@ class MeSerializer(serializers.Serializer):
     last_name = serializers.CharField(read_only=True)
     is_staff = serializers.BooleanField(read_only=True)
     is_superuser = serializers.BooleanField(read_only=True)
+    persona_id = serializers.IntegerField(read_only=True, allow_null=True)
+    responsable_grupo_ids = serializers.ListField(read_only=True)
+    unidad_roles = serializers.ListField(read_only=True)
+    is_apoderado = serializers.BooleanField(read_only=True)

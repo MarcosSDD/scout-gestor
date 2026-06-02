@@ -1,7 +1,15 @@
 from django.shortcuts import get_object_or_404
 from rest_framework import status
+from rest_framework.exceptions import PermissionDenied
 from rest_framework.generics import GenericAPIView
 
+from api.v1.access import (
+    can_manage_group_data,
+    get_accessible_subgrupo_miembros_qs,
+    get_accessible_subgrupos_qs,
+    get_accessible_unidades_qs,
+    get_editable_unidad_ids,
+)
 from api.v1.responses import success_response
 from api.v1.unidades.serializers import (
     AdultoUnidadRolListSerializer,
@@ -37,6 +45,9 @@ class _ListResponseMixin:
 class UnidadListCreateView(_ListResponseMixin, GenericAPIView):
     queryset = Unidad.objects.select_related("grupo", "rama").order_by("nombre")
 
+    def get_queryset(self):
+        return get_accessible_unidades_qs(self.request.user).select_related("grupo", "rama").order_by("nombre")
+
     def get(self, request):
         queryset = self.get_queryset()
 
@@ -59,6 +70,11 @@ class UnidadListCreateView(_ListResponseMixin, GenericAPIView):
         return self._list_response(queryset, UnidadListSerializer)
 
     def post(self, request):
+        grupo_id = request.data.get("grupo")
+        if not grupo_id:
+            raise PermissionDenied("Debe indicar grupo para crear unidad")
+        if not can_manage_group_data(request.user, int(grupo_id)):
+            raise PermissionDenied("No tiene permisos para crear unidades en este grupo")
         serializer = UnidadWriteSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         instance = serializer.save()
@@ -69,6 +85,9 @@ class UnidadListCreateView(_ListResponseMixin, GenericAPIView):
 class UnidadRetrieveUpdateView(GenericAPIView):
     queryset = Unidad.objects.select_related("grupo", "rama")
 
+    def get_queryset(self):
+        return get_accessible_unidades_qs(self.request.user).select_related("grupo", "rama")
+
     def get(self, request, pk):
         instance = get_object_or_404(self.get_queryset(), pk=pk)
         serializer = UnidadDetailSerializer(instance)
@@ -76,6 +95,8 @@ class UnidadRetrieveUpdateView(GenericAPIView):
 
     def patch(self, request, pk):
         instance = get_object_or_404(self.get_queryset(), pk=pk)
+        if not can_manage_group_data(request.user, instance.grupo_id):
+            raise PermissionDenied("No tiene permisos para editar esta unidad")
         serializer = UnidadWriteSerializer(instance, data=request.data, partial=True)
         serializer.is_valid(raise_exception=True)
         instance = serializer.save()
@@ -85,6 +106,13 @@ class UnidadRetrieveUpdateView(GenericAPIView):
 
 class AdultoUnidadRolListCreateView(_ListResponseMixin, GenericAPIView):
     queryset = AdultoUnidadRol.objects.select_related("unidad", "adulto__persona").order_by("unidad__nombre", "rol")
+
+    def get_queryset(self):
+        return (
+            AdultoUnidadRol.objects.select_related("unidad", "adulto__persona")
+            .filter(unidad__in=get_accessible_unidades_qs(self.request.user))
+            .order_by("unidad__nombre", "rol")
+        )
 
     def get(self, request):
         queryset = self.get_queryset()
@@ -100,6 +128,10 @@ class AdultoUnidadRolListCreateView(_ListResponseMixin, GenericAPIView):
         return self._list_response(queryset, AdultoUnidadRolListSerializer)
 
     def post(self, request):
+        unidad_id = request.data.get("unidad")
+        unidad = get_object_or_404(get_accessible_unidades_qs(request.user), pk=unidad_id)
+        if not can_manage_group_data(request.user, unidad.grupo_id):
+            raise PermissionDenied("No tiene permisos para asignar adultos en esta unidad")
         serializer = AdultoUnidadRolWriteSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         instance = serializer.save()
@@ -110,6 +142,11 @@ class AdultoUnidadRolListCreateView(_ListResponseMixin, GenericAPIView):
 class AdultoUnidadRolRetrieveUpdateView(GenericAPIView):
     queryset = AdultoUnidadRol.objects.select_related("unidad", "adulto__persona")
 
+    def get_queryset(self):
+        return AdultoUnidadRol.objects.select_related("unidad", "adulto__persona").filter(
+            unidad__in=get_accessible_unidades_qs(self.request.user)
+        )
+
     def get(self, request, pk):
         instance = get_object_or_404(self.get_queryset(), pk=pk)
         serializer = AdultoUnidadRolListSerializer(instance)
@@ -117,6 +154,8 @@ class AdultoUnidadRolRetrieveUpdateView(GenericAPIView):
 
     def patch(self, request, pk):
         instance = get_object_or_404(self.get_queryset(), pk=pk)
+        if not can_manage_group_data(request.user, instance.unidad.grupo_id):
+            raise PermissionDenied("No tiene permisos para editar esta asignacion")
         serializer = AdultoUnidadRolWriteSerializer(instance, data=request.data, partial=True)
         serializer.is_valid(raise_exception=True)
         instance = serializer.save()
@@ -126,6 +165,13 @@ class AdultoUnidadRolRetrieveUpdateView(GenericAPIView):
 
 class SubgrupoListCreateView(_ListResponseMixin, GenericAPIView):
     queryset = Subgrupo.objects.select_related("unidad", "lider_juvenil__persona").order_by("unidad__nombre", "nombre")
+
+    def get_queryset(self):
+        return (
+            Subgrupo.objects.select_related("unidad", "lider_juvenil__persona")
+            .filter(unidad__in=get_accessible_unidades_qs(self.request.user))
+            .order_by("unidad__nombre", "nombre")
+        )
 
     def get(self, request):
         queryset = self.get_queryset()
@@ -137,6 +183,10 @@ class SubgrupoListCreateView(_ListResponseMixin, GenericAPIView):
         return self._list_response(queryset, SubgrupoListSerializer)
 
     def post(self, request):
+        unidad_id = request.data.get("unidad")
+        unidad = get_object_or_404(get_accessible_unidades_qs(request.user), pk=unidad_id)
+        if not can_manage_group_data(request.user, unidad.grupo_id):
+            raise PermissionDenied("No tiene permisos para crear subgrupos en esta unidad")
         serializer = SubgrupoWriteSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         instance = serializer.save()
@@ -147,6 +197,11 @@ class SubgrupoListCreateView(_ListResponseMixin, GenericAPIView):
 class SubgrupoRetrieveUpdateView(GenericAPIView):
     queryset = Subgrupo.objects.select_related("unidad", "lider_juvenil__persona")
 
+    def get_queryset(self):
+        return Subgrupo.objects.select_related("unidad", "lider_juvenil__persona").filter(
+            unidad__in=get_accessible_unidades_qs(self.request.user)
+        )
+
     def get(self, request, pk):
         instance = get_object_or_404(self.get_queryset(), pk=pk)
         serializer = SubgrupoListSerializer(instance)
@@ -154,6 +209,8 @@ class SubgrupoRetrieveUpdateView(GenericAPIView):
 
     def patch(self, request, pk):
         instance = get_object_or_404(self.get_queryset(), pk=pk)
+        if not can_manage_group_data(request.user, instance.unidad.grupo_id):
+            raise PermissionDenied("No tiene permisos para editar este subgrupo")
         serializer = SubgrupoWriteSerializer(instance, data=request.data, partial=True)
         serializer.is_valid(raise_exception=True)
         instance = serializer.save()
@@ -166,6 +223,13 @@ class SubgrupoMiembroListCreateView(_ListResponseMixin, GenericAPIView):
         "subgrupo__nombre",
         "beneficiario__persona__apellidos",
     )
+
+    def get_queryset(self):
+        return (
+            SubgrupoMiembro.objects.select_related("subgrupo", "beneficiario__persona")
+            .filter(subgrupo__in=get_accessible_subgrupos_qs(self.request.user))
+            .order_by("subgrupo__nombre", "beneficiario__persona__apellidos")
+        )
 
     def get(self, request):
         queryset = self.get_queryset()
@@ -181,6 +245,11 @@ class SubgrupoMiembroListCreateView(_ListResponseMixin, GenericAPIView):
         return self._list_response(queryset, SubgrupoMiembroListSerializer)
 
     def post(self, request):
+        subgrupo_id = request.data.get("subgrupo")
+        subgrupo = get_object_or_404(get_accessible_subgrupos_qs(request.user), pk=subgrupo_id)
+        editable_unidad_ids = set(get_editable_unidad_ids(request.user))
+        if not can_manage_group_data(request.user, subgrupo.unidad.grupo_id) and subgrupo.unidad_id not in editable_unidad_ids:
+            raise PermissionDenied("No tiene permisos para editar miembros de este subgrupo")
         serializer = SubgrupoMiembroWriteSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         instance = serializer.save()
@@ -191,6 +260,9 @@ class SubgrupoMiembroListCreateView(_ListResponseMixin, GenericAPIView):
 class SubgrupoMiembroRetrieveUpdateView(GenericAPIView):
     queryset = SubgrupoMiembro.objects.select_related("subgrupo", "beneficiario__persona")
 
+    def get_queryset(self):
+        return get_accessible_subgrupo_miembros_qs(self.request.user).select_related("subgrupo", "beneficiario__persona")
+
     def get(self, request, pk):
         instance = get_object_or_404(self.get_queryset(), pk=pk)
         serializer = SubgrupoMiembroListSerializer(instance)
@@ -198,6 +270,9 @@ class SubgrupoMiembroRetrieveUpdateView(GenericAPIView):
 
     def patch(self, request, pk):
         instance = get_object_or_404(self.get_queryset(), pk=pk)
+        editable_unidad_ids = set(get_editable_unidad_ids(request.user))
+        if not can_manage_group_data(request.user, instance.subgrupo.unidad.grupo_id) and instance.subgrupo.unidad_id not in editable_unidad_ids:
+            raise PermissionDenied("No tiene permisos para editar este miembro")
         serializer = SubgrupoMiembroWriteSerializer(instance, data=request.data, partial=True)
         serializer.is_valid(raise_exception=True)
         instance = serializer.save()

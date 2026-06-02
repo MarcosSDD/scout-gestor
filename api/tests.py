@@ -13,10 +13,11 @@ from PIL import Image
 
 from catalogos.models import ComposicionPermitida, Distrito, Rama, Zona
 from formacion.models import AdultoGradoFormacion, GradoFormacion
-from organizacion.models import GrupoScout, TipoGrupo
+from organizacion.models import ConsejoGrupo, GrupoScout, TipoGrupo
 from personas.models import (
     Adulto,
     Apoderado,
+    ApoderadoBeneficiario,
     AreaDesarrollo,
     Beneficiario,
     Parentesco,
@@ -241,6 +242,18 @@ class GrupoScoutApiTests(APITestCase):
             username="grupouser",
             password="testpass123",
             email="grupos@scouts.cl",
+            is_staff=True,
+        )
+        Persona.objects.create(
+            usuario=self.user,
+            rut="11.111.110-7",
+            nombres="Grupo",
+            apellidos="Tester",
+            fecha_nacimiento="1980-01-01",
+            sexo=SexoPersona.MASCULINO,
+            direccion="Dir",
+            telefono="123",
+            email="grupos@scouts.cl",
         )
         self.zona_centro, _ = Zona.objects.get_or_create(nombre="Zona Centro API")
         self.zona_sur, _ = Zona.objects.get_or_create(nombre="Zona Sur API")
@@ -408,6 +421,18 @@ class PersonasUnidadesApiTests(APITestCase):
         self.user = get_user_model().objects.create_user(
             username="stage4user",
             password="testpass123",
+            email="stage4@scouts.cl",
+            is_staff=True,
+        )
+        Persona.objects.create(
+            usuario=self.user,
+            rut="11.111.112-3",
+            nombres="Stage4",
+            apellidos="Tester",
+            fecha_nacimiento="1980-01-01",
+            sexo=SexoPersona.MASCULINO,
+            direccion="Dir",
+            telefono="123",
             email="stage4@scouts.cl",
         )
         self.zona, _ = Zona.objects.get_or_create(nombre="Zona Stage 4")
@@ -892,6 +917,18 @@ class EstructuraJerarquiaApiTests(APITestCase):
             username="stage5user",
             password="testpass123",
             email="stage5@scouts.cl",
+            is_staff=True,
+        )
+        Persona.objects.create(
+            usuario=self.user,
+            rut="11.111.113-1",
+            nombres="Stage5",
+            apellidos="Tester",
+            fecha_nacimiento="1980-01-01",
+            sexo=SexoPersona.MASCULINO,
+            direccion="Dir",
+            telefono="123",
+            email="stage5@scouts.cl",
         )
 
         self.zona = Zona.objects.create(nombre="Zona Stage 5")
@@ -1184,6 +1221,24 @@ class DashboardApiTests(APITestCase):
             logo="",
         )
         self.unidad = Unidad.objects.create(grupo=self.grupo, rama=self.rama, nombre="Unidad Stage 6")
+        persona_user = Persona.objects.create(
+            usuario=self.user,
+            rut="10.999.999-5",
+            nombres="Usuario",
+            apellidos="Dashboard",
+            fecha_nacimiento="1980-01-01",
+            sexo=SexoPersona.MASCULINO,
+            direccion="Dir",
+            telefono="999",
+            email="stage6@scouts.cl",
+        )
+        adulto_user = Adulto.objects.create(
+            persona=persona_user,
+            rol_principal=RolAdulto.DIRIGENTE,
+            certificado_inhabilidades="certificados/test.pdf",
+            certificado_vigencia_hasta=timezone.localdate() + timezone.timedelta(days=30),
+        )
+        AdultoUnidadRol.objects.create(unidad=self.unidad, adulto=adulto_user, rol=RolAdultoUnidad.COLABORADOR)
 
     def _authenticate(self):
         login = self.client.post(
@@ -1217,7 +1272,8 @@ class DashboardApiTests(APITestCase):
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertTrue(response.data["success"])
-        self.assertEqual(response.data["data"]["kpis"]["total_miembros"], 0)
+        self.assertEqual(response.data["data"]["kpis"]["total_miembros"], 1)
+        self.assertEqual(response.data["data"]["kpis"]["total_adultos_activos"], 1)
         self.assertEqual(response.data["data"]["kpis"]["porcentaje_adultos_con_formacion"], 0.0)
         self.assertEqual(response.data["data"]["kpis"]["porcentaje_beneficiarios_con_apoderado_activo"], 0.0)
         self.assertEqual(response.data["data"]["alertas"]["cumpleanos_semana"], [])
@@ -1250,16 +1306,12 @@ class DashboardApiTests(APITestCase):
             sexo=SexoPersona.FEMENINO,
         )
         apoderado = Apoderado.objects.create(persona=persona_ap)
-        self.client.post(
-            reverse("v1:apoderados-beneficiarios-list"),
-            {
-                "apoderado": apoderado.id,
-                "beneficiario": ben1.id,
-                "parentesco": Parentesco.MADRE,
-                "autoriza_salidas_terreno": True,
-                "fecha_autorizacion": str(hoy),
-            },
-            format="json",
+        ApoderadoBeneficiario.objects.create(
+            apoderado=apoderado,
+            beneficiario=ben1,
+            parentesco=Parentesco.MADRE,
+            autoriza_salidas_terreno=True,
+            fecha_autorizacion=hoy,
         )
 
         persona_a1 = self._crear_persona(
@@ -1298,10 +1350,10 @@ class DashboardApiTests(APITestCase):
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(response.data["data"]["kpis"]["total_beneficiarios_activos"], 2)
-        self.assertEqual(response.data["data"]["kpis"]["total_adultos_activos"], 2)
-        self.assertEqual(response.data["data"]["kpis"]["total_miembros"], 4)
+        self.assertEqual(response.data["data"]["kpis"]["total_adultos_activos"], 3)
+        self.assertEqual(response.data["data"]["kpis"]["total_miembros"], 5)
         self.assertEqual(response.data["data"]["kpis"]["adultos_con_formacion"], 1)
-        self.assertEqual(response.data["data"]["kpis"]["porcentaje_adultos_con_formacion"], 50.0)
+        self.assertEqual(response.data["data"]["kpis"]["porcentaje_adultos_con_formacion"], 33.33)
         self.assertEqual(response.data["data"]["kpis"]["beneficiarios_con_apoderado_activo"], 1)
         self.assertEqual(response.data["data"]["kpis"]["porcentaje_beneficiarios_con_apoderado_activo"], 50.0)
 
@@ -1314,3 +1366,248 @@ class DashboardApiTests(APITestCase):
 
         tipos = {item["tipo"] for item in cumpleanos}
         self.assertEqual(tipos, {"BENEFICIARIO", "ADULTO"})
+
+
+class RbacApiTests(APITestCase):
+    def setUp(self):
+        self.zona = Zona.objects.create(nombre="Zona RBAC")
+        self.distrito = Distrito.objects.create(nombre="Distrito RBAC", zona=self.zona)
+        self.rama = Rama.objects.create(
+            nombre="Rama RBAC",
+            edad_minima=11,
+            edad_maxima=15,
+            composicion_permitida=ComposicionPermitida.MIXTA,
+            nomenclatura_subgrupos="Patrullas",
+            activa=True,
+        )
+        self.grupo = GrupoScout.objects.create(
+            nombre_oficial="Grupo RBAC",
+            distrito=self.distrito,
+            zona=self.zona,
+            tipo_grupo=TipoGrupo.PLURICONFESIONAL,
+            direccion="Dir",
+            comuna="Comuna",
+        )
+        self.unidad = Unidad.objects.create(grupo=self.grupo, rama=self.rama, nombre="Unidad RBAC")
+        self.grupo_otro = GrupoScout.objects.create(
+            nombre_oficial="Grupo RBAC Otro",
+            distrito=self.distrito,
+            zona=self.zona,
+            tipo_grupo=TipoGrupo.PLURICONFESIONAL,
+            direccion="Dir",
+            comuna="Comuna",
+        )
+        self.unidad_otra = Unidad.objects.create(grupo=self.grupo_otro, rama=self.rama, nombre="Unidad RBAC Otra")
+
+        self.staff = get_user_model().objects.create_user("staff", password="testpass123", is_staff=True)
+
+        self.user_resp = get_user_model().objects.create_user("resp", password="testpass123")
+        persona_resp = Persona.objects.create(
+            usuario=self.user_resp,
+            rut="20.000.000-5",
+            nombres="Resp",
+            apellidos="Grupo",
+            fecha_nacimiento="1980-01-01",
+            sexo=SexoPersona.MASCULINO,
+            direccion="Dir",
+            telefono="1",
+        )
+        adulto_resp = Adulto.objects.create(
+            persona=persona_resp,
+            rol_principal=RolAdulto.RESP_GRUPO,
+            certificado_inhabilidades="certificados/test.pdf",
+            certificado_vigencia_hasta=timezone.localdate() + timezone.timedelta(days=30),
+        )
+        ConsejoGrupo.objects.create(grupo=self.grupo, responsable_grupo=adulto_resp)
+
+        self.user_asistente = get_user_model().objects.create_user("asis", password="testpass123")
+        persona_asis = Persona.objects.create(
+            usuario=self.user_asistente,
+            rut="20.000.001-3",
+            nombres="Asis",
+            apellidos="Unidad",
+            fecha_nacimiento="1985-01-01",
+            sexo=SexoPersona.FEMENINO,
+            direccion="Dir",
+            telefono="2",
+        )
+        adulto_asis = Adulto.objects.create(
+            persona=persona_asis,
+            rol_principal=RolAdulto.DIRIGENTE,
+            certificado_inhabilidades="certificados/test.pdf",
+            certificado_vigencia_hasta=timezone.localdate() + timezone.timedelta(days=30),
+        )
+        AdultoUnidadRol.objects.create(unidad=self.unidad, adulto=adulto_asis, rol=RolAdultoUnidad.ASISTENTE)
+
+        self.user_colab = get_user_model().objects.create_user("colab", password="testpass123")
+        persona_colab = Persona.objects.create(
+            usuario=self.user_colab,
+            rut="20.000.002-1",
+            nombres="Colab",
+            apellidos="Unidad",
+            fecha_nacimiento="1986-01-01",
+            sexo=SexoPersona.MASCULINO,
+            direccion="Dir",
+            telefono="3",
+        )
+        adulto_colab = Adulto.objects.create(
+            persona=persona_colab,
+            rol_principal=RolAdulto.COLABORADOR,
+            certificado_inhabilidades="certificados/test.pdf",
+            certificado_vigencia_hasta=timezone.localdate() + timezone.timedelta(days=30),
+        )
+        AdultoUnidadRol.objects.create(unidad=self.unidad, adulto=adulto_colab, rol=RolAdultoUnidad.COLABORADOR)
+
+        persona_ben = Persona.objects.create(
+            rut="20.000.003-k",
+            nombres="Ben",
+            apellidos="Uno",
+            fecha_nacimiento="2013-01-01",
+            sexo=SexoPersona.MASCULINO,
+            direccion="Dir",
+            telefono="4",
+        )
+        self.beneficiario = Beneficiario.objects.create(
+            persona=persona_ben,
+            rama_actual=self.rama,
+            unidad=self.unidad,
+            fecha_ingreso=timezone.localdate(),
+        )
+        persona_ben_otro = Persona.objects.create(
+            rut="20.000.009-0",
+            nombres="Ben",
+            apellidos="Otro",
+            fecha_nacimiento="2013-02-01",
+            sexo=SexoPersona.MASCULINO,
+            direccion="Dir",
+            telefono="9",
+        )
+        self.beneficiario_otro = Beneficiario.objects.create(
+            persona=persona_ben_otro,
+            rama_actual=self.rama,
+            unidad=self.unidad_otra,
+            fecha_ingreso=timezone.localdate(),
+        )
+
+        self.user_apo = get_user_model().objects.create_user("apo", password="testpass123")
+        persona_apo = Persona.objects.create(
+            usuario=self.user_apo,
+            rut="20.000.004-8",
+            nombres="Apo",
+            apellidos="Uno",
+            fecha_nacimiento="1981-01-01",
+            sexo=SexoPersona.FEMENINO,
+            direccion="Dir",
+            telefono="5",
+        )
+        apoderado = Apoderado.objects.create(persona=persona_apo)
+        self.rel = ApoderadoBeneficiario.objects.create(
+            apoderado=apoderado,
+            beneficiario=self.beneficiario,
+            parentesco=Parentesco.MADRE,
+            autoriza_salidas_terreno=True,
+            fecha_autorizacion=timezone.localdate(),
+        )
+        self.area = AreaDesarrollo.objects.create(codigo="RBAC", nombre="RBAC", definicion="RBAC")
+        self.user_sin_persona = get_user_model().objects.create_user("nopersona", password="testpass123")
+
+    def _auth(self, username):
+        login = self.client.post(reverse("v1:auth-token"), {"username": username, "password": "testpass123"}, format="json")
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {login.data['data']['access']}")
+
+    def test_dashboard_visible_para_adulto_unidad(self):
+        self._auth("colab")
+        response = self.client.get(reverse("v1:dashboard-grupo", kwargs={"pk": self.grupo.id}))
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+
+    def test_colaborador_no_puede_editar_beneficiario(self):
+        self._auth("colab")
+        response = self.client.patch(
+            reverse("v1:beneficiarios-detail", kwargs={"pk": self.beneficiario.id}),
+            {"fecha_ingreso": str(timezone.localdate())},
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_asistente_puede_editar_beneficiario(self):
+        self._auth("asis")
+        response = self.client.patch(
+            reverse("v1:beneficiarios-detail", kwargs={"pk": self.beneficiario.id}),
+            {"fecha_ingreso": str(timezone.localdate())},
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+
+    def test_asistente_puede_crear_progresion_unidad(self):
+        self._auth("asis")
+        response = self.client.post(
+            reverse("v1:progresiones-list"),
+            {
+                "beneficiario": self.beneficiario.id,
+                "fecha": str(timezone.localdate()),
+                "tipo": TipoRegistroProgresion.DURANTE_CICLO,
+                "texto": "Avance",
+                "areas": [self.area.id],
+            },
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+
+    def test_apoderado_edita_solo_su_persona(self):
+        self._auth("apo")
+        response_ok = self.client.patch(
+            reverse("v1:personas-detail", kwargs={"pk": self.user_apo.persona.id}),
+            {"telefono": "999"},
+            format="json",
+        )
+        self.assertEqual(response_ok.status_code, status.HTTP_200_OK)
+
+        response_forbidden = self.client.patch(
+            reverse("v1:personas-detail", kwargs={"pk": self.beneficiario.persona.id}),
+            {"telefono": "888"},
+            format="json",
+        )
+        self.assertEqual(response_forbidden.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_responsable_grupo_puede_editar_unidad(self):
+        self._auth("resp")
+        response = self.client.patch(
+            reverse("v1:unidades-detail", kwargs={"pk": self.unidad.id}),
+            {"cupo_maximo": 40},
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+
+    def test_usuario_autenticado_sin_persona_no_accede_dominio(self):
+        self._auth("nopersona")
+        grupos = self.client.get(reverse("v1:grupos-list"))
+        self.assertEqual(grupos.status_code, status.HTTP_200_OK)
+        self.assertEqual(grupos.data["data"], [])
+
+        dashboard = self.client.get(reverse("v1:dashboard-grupo", kwargs={"pk": self.grupo.id}))
+        self.assertEqual(dashboard.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_colaborador_no_lista_beneficiarios_de_otra_unidad(self):
+        self._auth("colab")
+        response = self.client.get(reverse("v1:beneficiarios-list"))
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        ids = {item["id"] for item in response.data["data"]}
+        self.assertIn(self.beneficiario.id, ids)
+        self.assertNotIn(self.beneficiario_otro.id, ids)
+
+    def test_colaborador_no_lista_subgrupos_de_otra_unidad(self):
+        subgrupo_local = Subgrupo.objects.create(nombre="Patrulla Local", unidad=self.unidad)
+        subgrupo_otro = Subgrupo.objects.create(nombre="Patrulla Otra", unidad=self.unidad_otra)
+        self._auth("colab")
+        response = self.client.get(reverse("v1:subgrupos-list"))
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        ids = {item["id"] for item in response.data["data"]}
+        self.assertIn(subgrupo_local.id, ids)
+        self.assertNotIn(subgrupo_otro.id, ids)
+
+    def test_apoderado_no_lista_beneficiarios_no_relacionados(self):
+        self._auth("apo")
+        response = self.client.get(reverse("v1:beneficiarios-list"))
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        ids = {item["id"] for item in response.data["data"]}
+        self.assertEqual(ids, {self.beneficiario.id})

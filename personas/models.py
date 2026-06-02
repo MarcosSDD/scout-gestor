@@ -1,4 +1,5 @@
 from django.db import models
+from django.conf import settings
 
 from common.models import TimeStampedModel
 from common.validators import normalizar_rut, validar_foto_persona, validar_rut
@@ -39,6 +40,13 @@ class TipoRegistroProgresion(models.TextChoices):
 
 
 class Persona(TimeStampedModel):
+    usuario = models.OneToOneField(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="persona",
+    )
     rut = models.CharField(max_length=12, unique=True, validators=[validar_rut])
     nombres = models.CharField(max_length=120)
     apellidos = models.CharField(max_length=120)

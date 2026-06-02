@@ -1,6 +1,7 @@
 from django.db.models import Q
 from django.shortcuts import get_object_or_404
 from rest_framework import status
+from rest_framework.exceptions import PermissionDenied
 from rest_framework.generics import GenericAPIView
 from rest_framework.parsers import FormParser, JSONParser, MultiPartParser
 from rest_framework.views import APIView
@@ -24,6 +25,17 @@ from api.v1.personas.serializers import (
     RegistroProgresionScoutListSerializer,
     RegistroProgresionScoutWriteSerializer,
     ValidarRutSerializer,
+)
+from api.v1.access import (
+    can_edit_beneficiario,
+    can_edit_persona,
+    can_edit_progresion,
+    can_manage_group_data,
+    get_accessible_adultos_qs,
+    get_accessible_apoderados_qs,
+    get_accessible_beneficiarios_qs,
+    get_accessible_personas_qs,
+    get_accessible_progresiones_qs,
 )
 from api.v1.responses import success_response
 from personas.models import Adulto, Apoderado, ApoderadoBeneficiario, AreaDesarrollo, Beneficiario, Persona, RegistroProgresionScout
@@ -50,7 +62,7 @@ class PersonaListCreateView(_ListResponseMixin, GenericAPIView):
     parser_classes = [JSONParser, MultiPartParser, FormParser]
 
     def get_queryset(self):
-        queryset = Persona.objects.order_by("apellidos", "nombres")
+        queryset = get_accessible_personas_qs(self.request.user).order_by("apellidos", "nombres")
 
         estado = self.request.query_params.get("estado")
         if estado:
@@ -69,6 +81,10 @@ class PersonaListCreateView(_ListResponseMixin, GenericAPIView):
         return self._list_response(self.get_queryset(), PersonaListSerializer)
 
     def post(self, request):
+        grupo_id = request.data.get("grupo_id")
+        if not (request.user.is_staff or request.user.is_superuser):
+            if not grupo_id or not can_manage_group_data(request.user, int(grupo_id)):
+                raise PermissionDenied("No tiene permisos para crear personas")
         serializer = PersonaWriteSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         instance = serializer.save()
@@ -80,6 +96,9 @@ class PersonaRetrieveUpdateView(GenericAPIView):
     parser_classes = [JSONParser, MultiPartParser, FormParser]
     queryset = Persona.objects.order_by("apellidos", "nombres")
 
+    def get_queryset(self):
+        return get_accessible_personas_qs(self.request.user).order_by("apellidos", "nombres")
+
     def get(self, request, pk):
         instance = get_object_or_404(self.get_queryset(), pk=pk)
         serializer = PersonaDetailSerializer(instance)
@@ -87,6 +106,8 @@ class PersonaRetrieveUpdateView(GenericAPIView):
 
     def patch(self, request, pk):
         instance = get_object_or_404(self.get_queryset(), pk=pk)
+        if not can_edit_persona(request.user, instance):
+            raise PermissionDenied("No tiene permisos para editar esta persona")
         serializer = PersonaWriteSerializer(instance, data=request.data, partial=True)
         serializer.is_valid(raise_exception=True)
         instance = serializer.save()
@@ -108,10 +129,17 @@ class ValidarRutView(APIView):
 class AdultoListCreateView(_ListResponseMixin, GenericAPIView):
     queryset = Adulto.objects.select_related("persona").order_by("persona__apellidos", "persona__nombres")
 
+    def get_queryset(self):
+        return get_accessible_adultos_qs(self.request.user).select_related("persona").order_by(
+            "persona__apellidos", "persona__nombres"
+        )
+
     def get(self, request):
         return self._list_response(self.get_queryset(), AdultoListSerializer)
 
     def post(self, request):
+        if not (request.user.is_staff or request.user.is_superuser):
+            raise PermissionDenied("No tiene permisos para crear adultos")
         serializer = AdultoWriteSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         instance = serializer.save()
@@ -122,6 +150,9 @@ class AdultoListCreateView(_ListResponseMixin, GenericAPIView):
 class AdultoRetrieveUpdateView(GenericAPIView):
     queryset = Adulto.objects.select_related("persona")
 
+    def get_queryset(self):
+        return get_accessible_adultos_qs(self.request.user).select_related("persona")
+
     def get(self, request, pk):
         instance = get_object_or_404(self.get_queryset(), pk=pk)
         serializer = AdultoDetailSerializer(instance)
@@ -129,6 +160,8 @@ class AdultoRetrieveUpdateView(GenericAPIView):
 
     def patch(self, request, pk):
         instance = get_object_or_404(self.get_queryset(), pk=pk)
+        if not (request.user.is_staff or request.user.is_superuser):
+            raise PermissionDenied("No tiene permisos para editar adultos")
         serializer = AdultoWriteSerializer(instance, data=request.data, partial=True)
         serializer.is_valid(raise_exception=True)
         instance = serializer.save()
@@ -141,6 +174,12 @@ class BeneficiarioListCreateView(_ListResponseMixin, GenericAPIView):
         "persona__apellidos",
         "persona__nombres",
     )
+
+    def get_queryset(self):
+        return get_accessible_beneficiarios_qs(self.request.user).select_related("persona", "rama_actual", "unidad").order_by(
+            "persona__apellidos",
+            "persona__nombres",
+        )
 
     def get(self, request):
         queryset = self.get_queryset()
@@ -156,6 +195,8 @@ class BeneficiarioListCreateView(_ListResponseMixin, GenericAPIView):
         return self._list_response(queryset, BeneficiarioListSerializer)
 
     def post(self, request):
+        if not (request.user.is_staff or request.user.is_superuser):
+            raise PermissionDenied("No tiene permisos para crear beneficiarios")
         serializer = BeneficiarioWriteSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         instance = serializer.save()
@@ -168,6 +209,11 @@ class BeneficiarioRetrieveUpdateView(GenericAPIView):
         "registros_progresion__areas"
     )
 
+    def get_queryset(self):
+        return get_accessible_beneficiarios_qs(self.request.user).select_related(
+            "persona", "rama_actual", "unidad"
+        ).prefetch_related("registros_progresion__areas")
+
     def get(self, request, pk):
         instance = get_object_or_404(self.get_queryset(), pk=pk)
         serializer = BeneficiarioDetailSerializer(instance)
@@ -175,6 +221,8 @@ class BeneficiarioRetrieveUpdateView(GenericAPIView):
 
     def patch(self, request, pk):
         instance = get_object_or_404(self.get_queryset(), pk=pk)
+        if not can_edit_beneficiario(request.user, instance):
+            raise PermissionDenied("No tiene permisos para editar este beneficiario")
         serializer = BeneficiarioWriteSerializer(instance, data=request.data, partial=True)
         serializer.is_valid(raise_exception=True)
         instance = serializer.save()
@@ -191,6 +239,9 @@ class AreaDesarrolloListView(_ListResponseMixin, GenericAPIView):
 
 class RegistroProgresionScoutListCreateView(_ListResponseMixin, GenericAPIView):
     queryset = RegistroProgresionScout.objects.select_related("beneficiario__persona").prefetch_related("areas")
+
+    def get_queryset(self):
+        return get_accessible_progresiones_qs(self.request.user).select_related("beneficiario__persona").prefetch_related("areas")
 
     def get(self, request):
         queryset = self.get_queryset()
@@ -220,6 +271,9 @@ class RegistroProgresionScoutListCreateView(_ListResponseMixin, GenericAPIView):
     def post(self, request):
         serializer = RegistroProgresionScoutWriteSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
+        beneficiario = serializer.validated_data["beneficiario"]
+        if not can_edit_beneficiario(request.user, beneficiario):
+            raise PermissionDenied("No tiene permisos para crear progresiones para este beneficiario")
         instance = serializer.save()
         payload = RegistroProgresionScoutListSerializer(instance).data
         return success_response(data=payload, message="Registro de progresion creado", status_code=status.HTTP_201_CREATED)
@@ -228,6 +282,9 @@ class RegistroProgresionScoutListCreateView(_ListResponseMixin, GenericAPIView):
 class RegistroProgresionScoutRetrieveUpdateView(GenericAPIView):
     queryset = RegistroProgresionScout.objects.select_related("beneficiario__persona").prefetch_related("areas")
 
+    def get_queryset(self):
+        return get_accessible_progresiones_qs(self.request.user).select_related("beneficiario__persona").prefetch_related("areas")
+
     def get(self, request, pk):
         instance = get_object_or_404(self.get_queryset(), pk=pk)
         serializer = RegistroProgresionScoutListSerializer(instance)
@@ -235,6 +292,8 @@ class RegistroProgresionScoutRetrieveUpdateView(GenericAPIView):
 
     def patch(self, request, pk):
         instance = get_object_or_404(self.get_queryset(), pk=pk)
+        if not can_edit_progresion(request.user, instance):
+            raise PermissionDenied("No tiene permisos para editar esta progresion")
         serializer = RegistroProgresionScoutWriteSerializer(instance, data=request.data, partial=True)
         serializer.is_valid(raise_exception=True)
         instance = serializer.save()
@@ -245,10 +304,17 @@ class RegistroProgresionScoutRetrieveUpdateView(GenericAPIView):
 class ApoderadoListCreateView(_ListResponseMixin, GenericAPIView):
     queryset = Apoderado.objects.select_related("persona").order_by("persona__apellidos", "persona__nombres")
 
+    def get_queryset(self):
+        return get_accessible_apoderados_qs(self.request.user).select_related("persona").order_by(
+            "persona__apellidos", "persona__nombres"
+        )
+
     def get(self, request):
         return self._list_response(self.get_queryset(), ApoderadoListSerializer)
 
     def post(self, request):
+        if not (request.user.is_staff or request.user.is_superuser):
+            raise PermissionDenied("No tiene permisos para crear apoderados")
         serializer = ApoderadoWriteSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         instance = serializer.save()
@@ -259,6 +325,9 @@ class ApoderadoListCreateView(_ListResponseMixin, GenericAPIView):
 class ApoderadoRetrieveUpdateView(GenericAPIView):
     queryset = Apoderado.objects.select_related("persona")
 
+    def get_queryset(self):
+        return get_accessible_apoderados_qs(self.request.user).select_related("persona")
+
     def get(self, request, pk):
         instance = get_object_or_404(self.get_queryset(), pk=pk)
         serializer = ApoderadoDetailSerializer(instance)
@@ -266,6 +335,13 @@ class ApoderadoRetrieveUpdateView(GenericAPIView):
 
     def patch(self, request, pk):
         instance = get_object_or_404(self.get_queryset(), pk=pk)
+        own_apoderado = (
+            hasattr(request.user, "persona")
+            and hasattr(request.user.persona, "apoderado")
+            and request.user.persona.apoderado.id == instance.id
+        )
+        if not (request.user.is_staff or request.user.is_superuser or own_apoderado):
+            raise PermissionDenied("No tiene permisos para editar este apoderado")
         serializer = ApoderadoWriteSerializer(instance, data=request.data, partial=True)
         serializer.is_valid(raise_exception=True)
         instance = serializer.save()
@@ -278,6 +354,13 @@ class ApoderadoBeneficiarioListCreateView(_ListResponseMixin, GenericAPIView):
         "beneficiario__persona__apellidos",
         "beneficiario__persona__nombres",
     )
+
+    def get_queryset(self):
+        return (
+            ApoderadoBeneficiario.objects.select_related("apoderado__persona", "beneficiario__persona")
+            .filter(beneficiario__in=get_accessible_beneficiarios_qs(self.request.user))
+            .order_by("beneficiario__persona__apellidos", "beneficiario__persona__nombres")
+        )
 
     def get(self, request):
         queryset = self.get_queryset()
@@ -293,6 +376,8 @@ class ApoderadoBeneficiarioListCreateView(_ListResponseMixin, GenericAPIView):
         return self._list_response(queryset, ApoderadoBeneficiarioListSerializer)
 
     def post(self, request):
+        if not (request.user.is_staff or request.user.is_superuser):
+            raise PermissionDenied("No tiene permisos para crear relaciones apoderado-beneficiario")
         serializer = ApoderadoBeneficiarioWriteSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         instance = serializer.save()
@@ -303,6 +388,11 @@ class ApoderadoBeneficiarioListCreateView(_ListResponseMixin, GenericAPIView):
 class ApoderadoBeneficiarioRetrieveUpdateView(GenericAPIView):
     queryset = ApoderadoBeneficiario.objects.select_related("apoderado__persona", "beneficiario__persona")
 
+    def get_queryset(self):
+        return ApoderadoBeneficiario.objects.select_related("apoderado__persona", "beneficiario__persona").filter(
+            beneficiario__in=get_accessible_beneficiarios_qs(self.request.user)
+        )
+
     def get(self, request, pk):
         instance = get_object_or_404(self.get_queryset(), pk=pk)
         serializer = ApoderadoBeneficiarioListSerializer(instance)
@@ -310,6 +400,8 @@ class ApoderadoBeneficiarioRetrieveUpdateView(GenericAPIView):
 
     def patch(self, request, pk):
         instance = get_object_or_404(self.get_queryset(), pk=pk)
+        if not (request.user.is_staff or request.user.is_superuser):
+            raise PermissionDenied("No tiene permisos para editar esta relacion")
         serializer = ApoderadoBeneficiarioWriteSerializer(instance, data=request.data, partial=True)
         serializer.is_valid(raise_exception=True)
         instance = serializer.save()

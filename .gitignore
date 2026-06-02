@@ -165,6 +165,10 @@ CLAUDE.md
 session-*.md
 .agents
 .config
+.opencode
+.claude
+opencode.json
+.codegraph
 
 # Spyder project settings
 .spyderproject
@@ -225,3 +229,6 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+#version node
+mise.toml

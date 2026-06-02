@@ -2,8 +2,10 @@ from datetime import date
 
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
+from rest_framework.exceptions import PermissionDenied
 from rest_framework.views import APIView
 
+from api.v1.access import can_view_dashboard_group
 from api.v1.responses import success_response
 from organizacion.models import GrupoScout
 from personas.models import Adulto, Beneficiario, EstadoPersona
@@ -31,6 +33,8 @@ def _edad_en_fecha(fecha_nacimiento: date, fecha: date) -> int:
 
 class GrupoDashboardView(APIView):
     def get(self, request, pk):
+        if not can_view_dashboard_group(request.user, pk):
+            raise PermissionDenied("No tiene permisos para ver el dashboard de este grupo")
         grupo = get_object_or_404(GrupoScout.objects.select_related("zona", "distrito"), pk=pk)
         hoy = timezone.localdate()
 

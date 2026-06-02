@@ -4,9 +4,11 @@ from django.db.models import Count, Prefetch, Q
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
 from rest_framework import status
+from rest_framework.exceptions import PermissionDenied
 from rest_framework.generics import GenericAPIView
 from rest_framework.views import APIView
 
+from api.v1.access import can_manage_group_data, get_accessible_grupos_qs
 from api.v1.organizacion.serializers import (
     GrupoScoutDetailSerializer,
     GrupoScoutListSerializer,
@@ -20,7 +22,7 @@ from unidades.models import AdultoUnidadRol, EstadoUnidad, Subgrupo, SubgrupoMie
 
 class GrupoScoutListCreateView(GenericAPIView):
     def get_queryset(self):
-        queryset = GrupoScout.objects.select_related("zona", "distrito").annotate(
+        queryset = get_accessible_grupos_qs(self.request.user).select_related("zona", "distrito").annotate(
             total_beneficiarios_activos=Count(
                 "unidades__beneficiarios",
                 filter=Q(unidades__beneficiarios__persona__estado=EstadoPersona.ACTIVO),
@@ -69,6 +71,8 @@ class GrupoScoutListCreateView(GenericAPIView):
         return success_response(data=serializer.data)
 
     def post(self, request):
+        if not (request.user.is_staff or request.user.is_superuser):
+            raise PermissionDenied("No tiene permisos para crear grupos")
         serializer = GrupoScoutWriteSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         instance = serializer.save()
@@ -79,6 +83,9 @@ class GrupoScoutListCreateView(GenericAPIView):
 class GrupoScoutRetrieveUpdateView(GenericAPIView):
     queryset = GrupoScout.objects.select_related("zona", "distrito")
 
+    def get_queryset(self):
+        return get_accessible_grupos_qs(self.request.user).select_related("zona", "distrito")
+
     def get(self, request, pk):
         instance = get_object_or_404(self.get_queryset(), pk=pk)
         serializer = GrupoScoutDetailSerializer(instance)
@@ -86,6 +93,8 @@ class GrupoScoutRetrieveUpdateView(GenericAPIView):
 
     def patch(self, request, pk):
         instance = get_object_or_404(self.get_queryset(), pk=pk)
+        if not can_manage_group_data(request.user, instance.id):
+            raise PermissionDenied("No tiene permisos para editar este grupo")
         serializer = GrupoScoutWriteSerializer(instance, data=request.data, partial=True)
         serializer.is_valid(raise_exception=True)
         instance = serializer.save()
@@ -95,7 +104,9 @@ class GrupoScoutRetrieveUpdateView(GenericAPIView):
 
 class GrupoScoutCalcularMinimoView(APIView):
     def post(self, request, pk):
-        instance = get_object_or_404(GrupoScout, pk=pk)
+        instance = get_object_or_404(get_accessible_grupos_qs(request.user), pk=pk)
+        if not can_manage_group_data(request.user, instance.id):
+            raise PermissionDenied("No tiene permisos para recalcular este grupo")
         minimo = instance.recalcular_minimo_miembros(save=True)
         payload = {
             "id": instance.id,
@@ -137,7 +148,7 @@ class GrupoScoutEstructuraView(APIView):
         )
 
         return get_object_or_404(
-            GrupoScout.objects.select_related("zona", "distrito").prefetch_related(
+            get_accessible_grupos_qs(self.request.user).select_related("zona", "distrito").prefetch_related(
                 Prefetch("unidades", queryset=unidades_qs),
             ),
             pk=pk,
