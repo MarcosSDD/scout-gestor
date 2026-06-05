@@ -1,11 +1,44 @@
 import { render, screen } from '@testing-library/react'
+import type { ReactNode } from 'react'
+import { MemoryRouter } from 'react-router-dom'
 import App from './App'
 
 import { useHealthQuery } from '../features/health/useHealthQuery'
+import { AuthContext, type AuthContextValue } from '../features/auth/AuthContext'
+import { renderWithQueryClient } from '../test/renderWithQueryClient'
 
 vi.mock('../features/health/useHealthQuery', () => ({
   useHealthQuery: vi.fn(),
 }))
+
+const authUser = {
+  id: 1,
+  username: 'responsable1',
+  email: 'resp1@scouts.cl',
+  first_name: 'Ana',
+  last_name: 'Rojas',
+  is_staff: false,
+  is_superuser: false,
+  persona_id: null,
+  responsable_grupo_ids: [],
+  unidad_roles: [],
+  is_apoderado: false,
+}
+
+function authValue(overrides: Partial<AuthContextValue> = {}): AuthContextValue {
+  return {
+    status: 'anonymous',
+    user: null,
+    isAuthenticated: false,
+    login: vi.fn(),
+    logout: vi.fn(),
+    ...overrides,
+  }
+}
+
+function withAuth(ui: ReactNode, value = authValue()) {
+  return <AuthContext.Provider value={value}>{ui}</AuthContext.Provider>
+}
 
 describe('App', () => {
   beforeEach(() => {
@@ -20,9 +53,76 @@ describe('App', () => {
       error: null,
     } as unknown as ReturnType<typeof useHealthQuery>)
 
-    render(<App />)
+    render(
+      <MemoryRouter initialEntries={['/health']}>
+        <App />
+      </MemoryRouter>,
+    )
 
     expect(screen.getByRole('heading', { name: 'SCOUTS-GESTOR' })).toBeInTheDocument()
+  })
+
+  it('renders login page by default route', () => {
+    renderWithQueryClient(
+      withAuth(
+        <MemoryRouter initialEntries={['/']}>
+          <App />
+        </MemoryRouter>,
+      ),
+    )
+
+    expect(screen.getByRole('heading', { name: /ingresa/i })).toBeInTheDocument()
+  })
+
+  it('redirects session started route to authenticated app shell', () => {
+    render(
+      withAuth(
+        <MemoryRouter initialEntries={['/sesion-iniciada']}>
+          <App />
+        </MemoryRouter>,
+        authValue({ status: 'authenticated', user: authUser, isAuthenticated: true }),
+      ),
+    )
+
+    expect(screen.getByRole('link', { name: 'We Lemu inicio' })).toBeInTheDocument()
+  })
+
+  it('redirects anonymous app access to login', () => {
+    renderWithQueryClient(
+      withAuth(
+        <MemoryRouter initialEntries={['/app']}>
+          <App />
+        </MemoryRouter>,
+      ),
+    )
+
+    expect(screen.getByRole('heading', { name: /ingresa/i })).toBeInTheDocument()
+  })
+
+  it('renders forbidden page', () => {
+    render(
+      withAuth(
+        <MemoryRouter initialEntries={['/403']}>
+          <App />
+        </MemoryRouter>,
+      ),
+    )
+
+    expect(screen.getByRole('heading', { name: '403' })).toBeInTheDocument()
+    expect(screen.getByText(/no tienes permisos/i)).toBeInTheDocument()
+  })
+
+  it('renders not found page for unknown routes', () => {
+    render(
+      withAuth(
+        <MemoryRouter initialEntries={['/ruta-inexistente']}>
+          <App />
+        </MemoryRouter>,
+      ),
+    )
+
+    expect(screen.getByRole('heading', { name: '404' })).toBeInTheDocument()
+    expect(screen.getByText(/no existe o fue movida/i)).toBeInTheDocument()
   })
 
   it('shows loading state while health query is pending', () => {
@@ -33,7 +133,11 @@ describe('App', () => {
       error: null,
     } as unknown as ReturnType<typeof useHealthQuery>)
 
-    render(<App />)
+    render(
+      <MemoryRouter initialEntries={['/health']}>
+        <App />
+      </MemoryRouter>,
+    )
 
     expect(screen.getByRole('status')).toHaveTextContent('Conectando con API...')
   })
@@ -50,7 +154,11 @@ describe('App', () => {
       error: null,
     } as unknown as ReturnType<typeof useHealthQuery>)
 
-    render(<App />)
+    render(
+      <MemoryRouter initialEntries={['/health']}>
+        <App />
+      </MemoryRouter>,
+    )
 
     expect(screen.getByText('API ok - v1')).toBeInTheDocument()
   })
@@ -67,7 +175,11 @@ describe('App', () => {
       },
     } as unknown as ReturnType<typeof useHealthQuery>)
 
-    render(<App />)
+    render(
+      <MemoryRouter initialEntries={['/health']}>
+        <App />
+      </MemoryRouter>,
+    )
 
     expect(screen.getByRole('alert')).toHaveTextContent('No fue posible completar la solicitud')
   })

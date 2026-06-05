@@ -1,26 +1,33 @@
-import { useHealthQuery } from '../features/health/useHealthQuery'
+import { Navigate, Route, Routes } from 'react-router-dom'
+
+import { AppShell } from '../app-shell/AppShell'
+import { LoginPage } from '../features/auth/LoginPage'
+import { RequireAuth } from '../features/auth/RequireAuth'
+import { ForbiddenPage } from '../features/errors/ForbiddenPage'
+import { NotFoundPage } from '../features/errors/NotFoundPage'
+import { HomePage } from '../features/home/HomePage'
+import { HealthPage } from '../features/health/HealthPage'
 
 function App() {
-  const { data, isLoading, isError, error } = useHealthQuery()
-
   return (
-    <main style={{ padding: '24px' }}>
-      <h1>SCOUTS-GESTOR</h1>
-
-      {isLoading && <p role="status">Conectando con API...</p>}
-
-      {isError && (
-        <p role="alert">
-          {(error as { error?: { message?: string } })?.error?.message ?? 'No fue posible conectar con la API'}
-        </p>
-      )}
-
-      {data && (
-        <p>
-          API {data.data.status} - {data.data.version}
-        </p>
-      )}
-    </main>
+    <Routes>
+      <Route path="/" element={<Navigate to="/login" replace />} />
+      <Route path="/login" element={<LoginPage />} />
+      <Route path="/sesion-iniciada" element={<Navigate to="/app" replace />} />
+      <Route
+        path="/app"
+        element={(
+          <RequireAuth>
+            <AppShell>
+              <HomePage />
+            </AppShell>
+          </RequireAuth>
+        )}
+      />
+      <Route path="/403" element={<ForbiddenPage />} />
+      <Route path="/health" element={<HealthPage />} />
+      <Route path="*" element={<NotFoundPage />} />
+    </Routes>
   )
 }
 
