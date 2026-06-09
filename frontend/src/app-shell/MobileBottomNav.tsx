@@ -1,13 +1,20 @@
+import { NavLink } from 'react-router-dom'
+
+import { useAuth } from '../features/auth/useAuth'
 import { Icon } from './Icon'
+import { getVisibleNavItems } from './navigation'
 
 export function MobileBottomNav() {
+  const { user } = useAuth()
+  const links = getVisibleNavItems(user).filter((item) => item.showInMobile)
+
   return (
     <nav className="shell-mobile-footer" aria-label="Navegacion movil">
-      <a className="nav-center" href="/app" aria-label="Inicio"><Icon name="home" /></a>
-      <a href="/app" aria-label="Grupos"><Icon name="users" /></a>
-      <a href="/app" aria-label="Personas"><Icon name="user" /></a>
-      <a href="/app" aria-label="Unidades"><Icon name="layers" /></a>
-      <a href="/app" aria-label="Perfil"><Icon name="settings" /></a>
+      {links.map((link) => (
+        <NavLink key={link.id} className={link.id === 'dashboard' ? 'nav-center' : undefined} end={link.to === '/app'} to={link.to} aria-label={link.label}>
+          <Icon name={link.icon} />
+        </NavLink>
+      ))}
     </nav>
   )
 }

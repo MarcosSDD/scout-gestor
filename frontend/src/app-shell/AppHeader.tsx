@@ -1,3 +1,6 @@
+import { Link, NavLink } from 'react-router-dom'
+
+import { getVisibleNavItems } from './navigation'
 import { Icon } from './Icon'
 import type { AuthUser } from '../features/auth/authTypes'
 
@@ -10,14 +13,16 @@ type AppHeaderProps = {
 
 export function AppHeader({ user, onMenuClick, onSearchClick, onRightPanelClick }: AppHeaderProps) {
   const initials = user?.username.slice(0, 2).toUpperCase() ?? 'WL'
+  const quickLinks = getVisibleNavItems(user).filter((item) => item.showInHeader)
+  const profileLink = getVisibleNavItems(user).find((item) => item.id === 'perfil')
 
   return (
     <header className="shell-header">
       <div className="shell-header__top">
-        <a className="shell-brand" href="/app" aria-label="We Lemu inicio">
+        <Link className="shell-brand" to="/app" aria-label="We Lemu inicio">
           <img src="/images/scout.png" alt="Grupo Guia y Scout We Lemu" />
           <span>We Lemu</span>
-        </a>
+        </Link>
 
         <button className="shell-mobile-icon shell-mobile-icon--spacer" type="button" onClick={onRightPanelClick} aria-label="Abrir actividad">
           <Icon name="message" />
@@ -36,17 +41,24 @@ export function AppHeader({ user, onMenuClick, onSearchClick, onRightPanelClick 
       </form>
 
       <nav className="shell-header__center" aria-label="Accesos rapidos">
-        <a className="shell-header-icon shell-header-icon--active" href="/app" aria-label="Inicio"><Icon name="home" /></a>
-        <a className="shell-header-icon" href="/app" aria-label="Grupos"><Icon name="users" /></a>
-        <a className="shell-header-icon" href="/app" aria-label="Unidades"><Icon name="layers" /></a>
-        <a className="shell-header-icon" href="/app" aria-label="Panel"><Icon name="layout" /></a>
+        {quickLinks.map((link) => (
+          <NavLink
+            key={link.id}
+            className={({ isActive }) => `shell-header-icon ${isActive ? 'shell-header-icon--active' : ''}`}
+            end={link.to === '/app'}
+            to={link.to}
+            aria-label={link.label}
+          >
+            <Icon name={link.icon} />
+          </NavLink>
+        ))}
       </nav>
 
       <div className="shell-header__actions" aria-label="Acciones de usuario">
         <button className="shell-action-icon" type="button" aria-label="Notificaciones"><span className="dot-count" /><Icon name="bell" /></button>
         <button className="shell-action-icon" type="button" aria-label="Mensajes" onClick={onRightPanelClick}><Icon name="message" /></button>
         <button className="shell-action-icon" type="button" aria-label="Configuracion"><Icon name="settings" /></button>
-        <a className="shell-avatar" href="/app" aria-label={`Perfil ${user?.username ?? 'usuario'}`}>{initials}</a>
+        <Link className="shell-avatar" to={profileLink?.to ?? '/app'} aria-label={`Perfil ${user?.username ?? 'usuario'}`}>{initials}</Link>
       </div>
     </header>
   )

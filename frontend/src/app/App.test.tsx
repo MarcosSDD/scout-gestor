@@ -25,6 +25,12 @@ const authUser = {
   is_apoderado: false,
 }
 
+const adminUser = {
+  ...authUser,
+  is_staff: true,
+  persona_id: 10,
+}
+
 function authValue(overrides: Partial<AuthContextValue> = {}): AuthContextValue {
   return {
     status: 'anonymous',
@@ -97,6 +103,40 @@ describe('App', () => {
     )
 
     expect(screen.getByRole('heading', { name: /ingresa/i })).toBeInTheDocument()
+  })
+
+  it.each([
+    ['/app/grupos', 'Grupos', /gestion de grupos se conectara proximamente/i],
+    ['/app/personas', 'Personas', /listados de personas se conectaran proximamente/i],
+    ['/app/unidades', 'Unidades', /estructura de unidades se conectara proximamente/i],
+    ['/app/formacion', 'Formacion', /modulo de formacion estara disponible proximamente/i],
+    ['/app/perfil', 'Mi perfil', /informacion del usuario autenticado/i],
+  ])('renders protected placeholder route %s', (path, heading, text) => {
+    render(
+      withAuth(
+        <MemoryRouter initialEntries={[path]}>
+          <App />
+        </MemoryRouter>,
+        authValue({ status: 'authenticated', user: adminUser, isAuthenticated: true }),
+      ),
+    )
+
+    expect(screen.getByRole('heading', { name: heading })).toBeInTheDocument()
+    expect(screen.getByText(text)).toBeInTheDocument()
+    expect(screen.getByLabelText('Navegacion principal')).toBeInTheDocument()
+  })
+
+  it('shows forbidden UX for direct access to hidden visual routes', () => {
+    render(
+      withAuth(
+        <MemoryRouter initialEntries={['/app/grupos']}>
+          <App />
+        </MemoryRouter>,
+        authValue({ status: 'authenticated', user: authUser, isAuthenticated: true }),
+      ),
+    )
+
+    expect(screen.getByRole('heading', { name: '403' })).toBeInTheDocument()
   })
 
   it('renders forbidden page', () => {

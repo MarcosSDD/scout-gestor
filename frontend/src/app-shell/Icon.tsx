@@ -1,4 +1,4 @@
-type IconName = 'home' | 'users' | 'user' | 'bell' | 'settings' | 'search' | 'menu' | 'message' | 'logout' | 'layers' | 'layout' | 'shield'
+export type IconName = 'home' | 'users' | 'user' | 'bell' | 'settings' | 'search' | 'menu' | 'message' | 'logout' | 'layers' | 'layout' | 'shield'
 
 type IconProps = {
   name: IconName

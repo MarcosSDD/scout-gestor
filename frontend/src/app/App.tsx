@@ -1,12 +1,33 @@
+import type { ReactNode } from 'react'
 import { Navigate, Route, Routes } from 'react-router-dom'
 
 import { AppShell } from '../app-shell/AppShell'
+import { canSeeNavItem, getNavItemById, type ShellNavItemId } from '../app-shell/navigation'
 import { LoginPage } from '../features/auth/LoginPage'
 import { RequireAuth } from '../features/auth/RequireAuth'
+import { useAuth } from '../features/auth/useAuth'
 import { ForbiddenPage } from '../features/errors/ForbiddenPage'
 import { NotFoundPage } from '../features/errors/NotFoundPage'
 import { HomePage } from '../features/home/HomePage'
 import { HealthPage } from '../features/health/HealthPage'
+import { PlaceholderPage } from '../features/placeholders/PlaceholderPage'
+import { ProfilePage } from '../features/placeholders/ProfilePage'
+
+type AppPageProps = {
+  navItemId: ShellNavItemId
+  children: ReactNode
+}
+
+function AppPage({ navItemId, children }: AppPageProps) {
+  const { user } = useAuth()
+  const navItem = getNavItemById(navItemId)
+
+  if (!navItem || !canSeeNavItem(user, navItem)) {
+    return <ForbiddenPage />
+  }
+
+  return <AppShell>{children}</AppShell>
+}
 
 function App() {
   return (
@@ -18,9 +39,59 @@ function App() {
         path="/app"
         element={(
           <RequireAuth>
-            <AppShell>
+            <AppPage navItemId="dashboard">
               <HomePage />
-            </AppShell>
+            </AppPage>
+          </RequireAuth>
+        )}
+      />
+      <Route
+        path="/app/grupos"
+        element={(
+          <RequireAuth>
+            <AppPage navItemId="grupos">
+              <PlaceholderPage title="Grupos" description="La gestion de grupos se conectara proximamente." />
+            </AppPage>
+          </RequireAuth>
+        )}
+      />
+      <Route
+        path="/app/personas"
+        element={(
+          <RequireAuth>
+            <AppPage navItemId="personas">
+              <PlaceholderPage title="Personas" description="Los listados de personas se conectaran proximamente." />
+            </AppPage>
+          </RequireAuth>
+        )}
+      />
+      <Route
+        path="/app/unidades"
+        element={(
+          <RequireAuth>
+            <AppPage navItemId="unidades">
+              <PlaceholderPage title="Unidades" description="La estructura de unidades se conectara proximamente." />
+            </AppPage>
+          </RequireAuth>
+        )}
+      />
+      <Route
+        path="/app/formacion"
+        element={(
+          <RequireAuth>
+            <AppPage navItemId="formacion">
+              <PlaceholderPage title="Formacion" description="El modulo de formacion estara disponible proximamente." />
+            </AppPage>
+          </RequireAuth>
+        )}
+      />
+      <Route
+        path="/app/perfil"
+        element={(
+          <RequireAuth>
+            <AppPage navItemId="perfil">
+              <ProfilePage />
+            </AppPage>
           </RequireAuth>
         )}
       />

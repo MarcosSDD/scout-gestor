@@ -1,4 +1,8 @@
+import { NavLink } from 'react-router-dom'
+
+import { useAuth } from '../features/auth/useAuth'
 import { Icon } from './Icon'
+import { getVisibleNavItems, type ShellNavGroup, type ShellNavItem } from './navigation'
 
 type SidebarProps = {
   isOpen: boolean
@@ -6,30 +10,23 @@ type SidebarProps = {
   onLogout: () => void
 }
 
-const managementLinks = [
-  { label: 'Dashboard', icon: 'home' as const },
-  { label: 'Grupos', icon: 'users' as const },
-  { label: 'Personas', icon: 'user' as const },
-  { label: 'Unidades', icon: 'layers' as const },
-]
-
-const operationLinks = [
-  { label: 'Alertas', icon: 'bell' as const },
-  { label: 'Actividad', icon: 'message' as const },
-  { label: 'Formacion', icon: 'shield' as const },
-]
-
 export function Sidebar({ isOpen, onClose, onLogout }: SidebarProps) {
+  const { user } = useAuth()
+  const visibleItems = getVisibleNavItems(user)
+  const managementLinks = visibleItems.filter((item) => item.group === 'Gestion')
+  const operationLinks = visibleItems.filter((item) => item.group === 'Operativo')
+  const accountLinks = visibleItems.filter((item) => item.group === 'Cuenta')
+
   return (
     <>
       <button className={`shell-backdrop ${isOpen ? 'shell-backdrop--visible' : ''}`} type="button" aria-label="Cerrar menu" onClick={onClose} />
       <aside className={`shell-sidebar ${isOpen ? 'nav-active' : ''}`} aria-label="Navegacion principal">
         <div className="shell-sidebar__inner">
-          <NavGroup caption="Gestion" links={managementLinks} activeLabel="Dashboard" />
-          <NavGroup caption="Operativo" links={operationLinks} />
+          <NavGroup caption="Gestion" links={managementLinks} />
+          {operationLinks.length > 0 && <NavGroup caption="Operativo" links={operationLinks} />}
           <div className="shell-nav-card">
             <p className="shell-nav-caption">Cuenta</p>
-            <button className="shell-nav-link" type="button"><Icon name="settings" /><span>Configuracion</span></button>
+            {accountLinks.map((link) => <NavItem key={link.id} link={link} />)}
             <button className="shell-nav-link" type="button" onClick={onLogout}><Icon name="logout" /><span>Salir</span></button>
           </div>
         </div>
@@ -38,20 +35,30 @@ export function Sidebar({ isOpen, onClose, onLogout }: SidebarProps) {
   )
 }
 
-function NavGroup({ caption, links, activeLabel }: { caption: string, links: Array<{ label: string, icon: 'home' | 'users' | 'user' | 'layers' | 'bell' | 'message' | 'shield' }>, activeLabel?: string }) {
+function NavGroup({ caption, links }: { caption: ShellNavGroup, links: ShellNavItem[] }) {
   return (
     <div className="shell-nav-card">
       <p className="shell-nav-caption">{caption}</p>
       <ul>
         {links.map((link) => (
           <li key={link.label}>
-            <a className={`shell-nav-link ${link.label === activeLabel ? 'shell-nav-link--active' : ''}`} href="/app">
-              <Icon name={link.icon} />
-              <span>{link.label}</span>
-            </a>
+            <NavItem link={link} />
           </li>
         ))}
       </ul>
     </div>
+  )
+}
+
+function NavItem({ link }: { link: ShellNavItem }) {
+  return (
+    <NavLink
+      className={({ isActive }) => `shell-nav-link ${isActive ? 'shell-nav-link--active' : ''}`}
+      end={link.to === '/app'}
+      to={link.to}
+    >
+      <Icon name={link.icon} />
+      <span>{link.label}</span>
+    </NavLink>
   )
 }
