@@ -10,6 +10,10 @@ export default defineConfig(({ mode }) => {
   return {
     plugins: [react()],
     server: {
+      allowedHosts: [
+        'localhost',
+        '.trycloudflare.com'  // Permite todos los subdominios de trycloudflare.com
+      ],      
       proxy: {
         '/api': proxyTarget,
         '/media': proxyTarget,

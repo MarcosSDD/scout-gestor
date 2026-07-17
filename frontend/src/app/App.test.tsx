@@ -11,6 +11,10 @@ vi.mock('../features/health/useHealthQuery', () => ({
   useHealthQuery: vi.fn(),
 }))
 
+vi.mock('../features/dashboard/DashboardPage', () => ({
+  DashboardPage: () => <div>Dashboard inicial mock</div>,
+}))
+
 const authUser = {
   id: 1,
   username: 'responsable1',
@@ -91,6 +95,21 @@ describe('App', () => {
     )
 
     expect(screen.getByRole('link', { name: 'We Lemu inicio' })).toBeInTheDocument()
+    expect(screen.getByText('Dashboard inicial mock')).toBeInTheDocument()
+  })
+
+  it('renders dashboard route for authenticated users', () => {
+    render(
+      withAuth(
+        <MemoryRouter initialEntries={['/app']}>
+          <App />
+        </MemoryRouter>,
+        authValue({ status: 'authenticated', user: adminUser, isAuthenticated: true }),
+      ),
+    )
+
+    expect(screen.getByText('Dashboard inicial mock')).toBeInTheDocument()
+    expect(screen.getByLabelText('Navegacion principal')).toBeInTheDocument()
   })
 
   it('redirects anonymous app access to login', () => {

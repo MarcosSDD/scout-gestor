@@ -6,9 +6,9 @@ import { canSeeNavItem, getNavItemById, type ShellNavItemId } from '../app-shell
 import { LoginPage } from '../features/auth/LoginPage'
 import { RequireAuth } from '../features/auth/RequireAuth'
 import { useAuth } from '../features/auth/useAuth'
+import { DashboardPage } from '../features/dashboard/DashboardPage'
 import { ForbiddenPage } from '../features/errors/ForbiddenPage'
 import { NotFoundPage } from '../features/errors/NotFoundPage'
-import { HomePage } from '../features/home/HomePage'
 import { HealthPage } from '../features/health/HealthPage'
 import { PlaceholderPage } from '../features/placeholders/PlaceholderPage'
 import { ProfilePage } from '../features/placeholders/ProfilePage'
@@ -40,7 +40,7 @@ function App() {
         element={(
           <RequireAuth>
             <AppPage navItemId="dashboard">
-              <HomePage />
+              <DashboardPage />
             </AppPage>
           </RequireAuth>
         )}

@@ -16,7 +16,15 @@ SECRET_KEY = os.getenv("DJANGO_SECRET_KEY", "20b196a038804af50931dbe87df6831605e
 DEBUG = os.getenv("DJANGO_DEBUG", "true").lower() == "true"
 
 ALLOWED_HOSTS = os.getenv("DJANGO_ALLOWED_HOSTS", "localhost:8000,127.0.0.1,localhost,127.0.0.1:8000").split(",")
-
+# ALLOWED_HOSTS = [
+#     'dame-volleyball-interest-wines.trycloudflare.com',
+#     'localhost',
+#     '127.0.0.1',
+# ]
+# CSRF_TRUSTED_ORIGINS = ['https://*.trycloudflare.com',
+#                         'http://*.trycloudflare.com',
+#                         'https://dame-volleyball-interest-wines.trycloudflare.com',
+#                         'http://dame-volleyball-interest-wines.trycloudflare.com',]
 
 # Application definition
 
