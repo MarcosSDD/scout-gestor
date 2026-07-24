@@ -1,3 +1,4 @@
+import { useEffect } from 'react'
 import { NavLink } from 'react-router-dom'
 
 import { useAuth } from '../features/auth/useAuth'
@@ -17,16 +18,23 @@ export function Sidebar({ isOpen, onClose, onLogout }: SidebarProps) {
   const operationLinks = visibleItems.filter((item) => item.group === 'Operativo')
   const accountLinks = visibleItems.filter((item) => item.group === 'Cuenta')
 
+  useEffect(() => {
+    if (!isOpen) return undefined
+    const onKeyDown = (event: KeyboardEvent) => { if (event.key === 'Escape') onClose() }
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [isOpen, onClose])
+
   return (
     <>
       <button className={`shell-backdrop ${isOpen ? 'shell-backdrop--visible' : ''}`} type="button" aria-label="Cerrar menu" onClick={onClose} />
-      <aside className={`shell-sidebar ${isOpen ? 'nav-active' : ''}`} aria-label="Navegacion principal">
+      <aside id="shell-sidebar" className={`shell-sidebar ${isOpen ? 'nav-active' : ''}`} aria-label="Navegacion principal">
         <div className="shell-sidebar__inner">
-          <NavGroup caption="Gestion" links={managementLinks} />
-          {operationLinks.length > 0 && <NavGroup caption="Operativo" links={operationLinks} />}
+          <NavGroup caption="Gestion" links={managementLinks} onNavigate={onClose} />
+          {operationLinks.length > 0 && <NavGroup caption="Operativo" links={operationLinks} onNavigate={onClose} />}
           <div className="shell-nav-card">
             <p className="shell-nav-caption">Cuenta</p>
-            {accountLinks.map((link) => <NavItem key={link.id} link={link} />)}
+            {accountLinks.map((link) => <NavItem key={link.id} link={link} onNavigate={onClose} />)}
             <button className="shell-nav-link" type="button" onClick={onLogout}><Icon name="logout" /><span>Salir</span></button>
           </div>
         </div>
@@ -35,14 +43,14 @@ export function Sidebar({ isOpen, onClose, onLogout }: SidebarProps) {
   )
 }
 
-function NavGroup({ caption, links }: { caption: ShellNavGroup, links: ShellNavItem[] }) {
+function NavGroup({ caption, links, onNavigate }: { caption: ShellNavGroup, links: ShellNavItem[], onNavigate: () => void }) {
   return (
     <div className="shell-nav-card">
       <p className="shell-nav-caption">{caption}</p>
       <ul>
         {links.map((link) => (
           <li key={link.label}>
-            <NavItem link={link} />
+            <NavItem link={link} onNavigate={onNavigate} />
           </li>
         ))}
       </ul>
@@ -50,12 +58,13 @@ function NavGroup({ caption, links }: { caption: ShellNavGroup, links: ShellNavI
   )
 }
 
-function NavItem({ link }: { link: ShellNavItem }) {
+function NavItem({ link, onNavigate }: { link: ShellNavItem, onNavigate?: () => void }) {
   return (
     <NavLink
       className={({ isActive }) => `shell-nav-link ${isActive ? 'shell-nav-link--active' : ''}`}
       end={link.to === '/app'}
       to={link.to}
+      onClick={onNavigate}
     >
       <Icon name={link.icon} />
       <span>{link.label}</span>

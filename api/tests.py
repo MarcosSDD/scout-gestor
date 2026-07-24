@@ -496,6 +496,11 @@ class PersonasUnidadesApiTests(APITestCase):
         self.assertEqual(personas_response.status_code, status.HTTP_401_UNAUTHORIZED)
         self.assertEqual(unidades_response.status_code, status.HTTP_401_UNAUTHORIZED)
 
+    def test_debug_sirve_solo_fotos_publicas_y_no_certificados(self):
+        response = self.client.get("/media/certificados_inhabilidades/test.pdf")
+
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+
     def test_validar_rut_normaliza_y_confirma(self):
         self._authenticate()
 
@@ -1688,3 +1693,64 @@ class RbacApiTests(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         ids = {item["id"] for item in response.data["data"]}
         self.assertEqual(ids, {self.beneficiario.id})
+
+    def test_listados_omiten_pii_y_ruta_de_certificado(self):
+        self._auth("staff")
+
+        personas = self.client.get(reverse("v1:personas-list"))
+        adultos = self.client.get(reverse("v1:adultos-list"))
+
+        self.assertEqual(personas.status_code, status.HTTP_200_OK)
+        self.assertEqual(set(personas.data["data"][0]), {"id", "nombre_completo", "estado"})
+        self.assertNotIn("rut", str(personas.data["data"]))
+        self.assertNotIn("telefono", str(personas.data["data"]))
+        self.assertNotIn("email", str(personas.data["data"]))
+        self.assertEqual(adultos.status_code, status.HTTP_200_OK)
+        self.assertNotIn("certificado_inhabilidades", str(adultos.data["data"]))
+
+    def test_apoderado_no_lista_coapoderados(self):
+        persona_coapoderado = Persona.objects.create(
+            rut="20.000.012-0",
+            nombres="Co",
+            apellidos="Apoderado",
+            fecha_nacimiento="1982-01-01",
+            sexo=SexoPersona.MASCULINO,
+            direccion="Dir",
+            telefono="12",
+        )
+        coapoderado = Apoderado.objects.create(persona=persona_coapoderado)
+        ApoderadoBeneficiario.objects.create(
+            apoderado=coapoderado,
+            beneficiario=self.beneficiario,
+            parentesco=Parentesco.PADRE,
+        )
+        self._auth("apo")
+
+        apoderados = self.client.get(reverse("v1:apoderados-list"))
+
+        self.assertEqual(apoderados.status_code, status.HTTP_200_OK)
+        self.assertEqual({item["id"] for item in apoderados.data["data"]}, {self.rel.apoderado_id})
+        self.assertNotIn("Co Apoderado", str(apoderados.data["data"]))
+
+    def test_usuario_hibrido_suma_alcance_apoderado_y_unidad(self):
+        adulto = Adulto.objects.create(
+            persona=self.user_apo.persona,
+            rol_principal=RolAdulto.APODERADO,
+            certificado_inhabilidades="certificados/test.pdf",
+            certificado_vigencia_hasta=timezone.localdate() + timezone.timedelta(days=30),
+        )
+        AdultoUnidadRol.objects.create(unidad=self.unidad_otra, adulto=adulto, rol=RolAdultoUnidad.ASISTENTE)
+        self._auth("apo")
+
+        response = self.client.get(reverse("v1:beneficiarios-list"))
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual({item["id"] for item in response.data["data"]}, {self.beneficiario.id, self.beneficiario_otro.id})
+
+    def test_beneficiarios_filtran_sin_ampliar_alcance(self):
+        self._auth("colab")
+
+        response = self.client.get(reverse("v1:beneficiarios-list"), {"unidad_id": self.unidad_otra.id})
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["data"], [])

@@ -85,13 +85,17 @@ def get_accessible_beneficiarios_qs(user):
         return Beneficiario.objects.all()
 
     persona = get_user_persona(user)
+    if not persona:
+        return Beneficiario.objects.none()
+
+    filters = Q(pk__in=[])
     if persona and hasattr(persona, "apoderado"):
-        return Beneficiario.objects.filter(relaciones_apoderados__apoderado=persona.apoderado).distinct()
+        filters |= Q(relaciones_apoderados__apoderado=persona.apoderado)
 
     unidad_ids = list(get_accessible_unidades_qs(user).values_list("id", flat=True))
-    if not unidad_ids:
-        return Beneficiario.objects.none()
-    return Beneficiario.objects.filter(unidad_id__in=unidad_ids)
+    if unidad_ids:
+        filters |= Q(unidad_id__in=unidad_ids)
+    return Beneficiario.objects.filter(filters).distinct()
 
 
 def get_accessible_adultos_qs(user):
@@ -114,14 +118,18 @@ def get_accessible_apoderados_qs(user):
         return Apoderado.objects.all()
 
     persona = get_user_persona(user)
-    if persona and hasattr(persona, "apoderado"):
-        own = Q(persona=persona)
-    else:
-        own = Q(pk__in=[])
+    if not persona:
+        return Apoderado.objects.none()
 
-    beneficiario_ids = list(get_accessible_beneficiarios_qs(user).values_list("id", flat=True))
-    by_benef = Q(relaciones_beneficiarios__beneficiario_id__in=beneficiario_ids) if beneficiario_ids else Q(pk__in=[])
-    return Apoderado.objects.filter(own | by_benef).distinct()
+    filters = Q(pk__in=[])
+    if persona and hasattr(persona, "apoderado"):
+        filters |= Q(persona=persona)
+
+    if hasattr(persona, "adulto"):
+        beneficiario_ids = list(get_accessible_beneficiarios_qs(user).values_list("id", flat=True))
+        if beneficiario_ids:
+            filters |= Q(relaciones_beneficiarios__beneficiario_id__in=beneficiario_ids)
+    return Apoderado.objects.filter(filters).distinct()
 
 
 def get_accessible_personas_qs(user):

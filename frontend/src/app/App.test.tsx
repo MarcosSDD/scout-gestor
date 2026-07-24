@@ -23,6 +23,12 @@ vi.mock('../features/grupos/GrupoDetailPage', () => ({
   GrupoDetailPage: () => <><h1>Grupo detalle</h1><p>Estructura visible mock</p></>,
 }))
 
+vi.mock('../features/personas/PersonasLayout', () => ({ PersonasLayout: () => <div>Personas layout mock</div> }))
+vi.mock('../features/personas/PersonasPages', () => ({
+  PersonasPage: () => <h1>Personas</h1>, AdultosPage: () => <h1>Adultos</h1>, BeneficiariosPage: () => <h1>Beneficiarios</h1>, ApoderadosPage: () => <h1>Apoderados</h1>,
+}))
+vi.mock('../features/unidades/UnidadesPage', () => ({ UnidadesPage: () => <h1>Unidades</h1> }))
+
 const authUser = {
   id: 1,
   username: 'responsable1',
@@ -133,8 +139,6 @@ describe('App', () => {
   })
 
   it.each([
-    ['/app/personas', 'Personas', /listados de personas se conectaran proximamente/i],
-    ['/app/unidades', 'Unidades', /estructura de unidades se conectara proximamente/i],
     ['/app/formacion', 'Formacion', /modulo de formacion estara disponible proximamente/i],
     ['/app/perfil', 'Mi perfil', /informacion del usuario autenticado/i],
   ])('renders protected placeholder route %s', (path, heading, text) => {
@@ -159,6 +163,19 @@ describe('App', () => {
           <App />
         </MemoryRouter>,
         authValue({ status: 'authenticated', user: authUser, isAuthenticated: true }),
+      ),
+    )
+
+    expect(screen.getByRole('heading', { name: '403' })).toBeInTheDocument()
+  })
+
+  it('keeps administrative people lists hidden from apoderado-only users', () => {
+    render(
+      withAuth(
+        <MemoryRouter initialEntries={['/app/personas']}>
+          <App />
+        </MemoryRouter>,
+        authValue({ status: 'authenticated', user: { ...authUser, persona_id: 8, is_apoderado: true }, isAuthenticated: true }),
       ),
     )
 

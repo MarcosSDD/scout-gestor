@@ -24,7 +24,7 @@ function user(overrides: Partial<AuthUser> = {}): AuthUser {
 function renderHeader(authUser: AuthUser) {
   return render(
     <MemoryRouter>
-      <AppHeader user={authUser} onMenuClick={vi.fn()} onSearchClick={vi.fn()} onRightPanelClick={vi.fn()} />
+      <AppHeader user={authUser} onMenuClick={vi.fn()} isMenuOpen={false} onSearchClick={vi.fn()} onRightPanelClick={vi.fn()} />
     </MemoryRouter>,
   )
 }

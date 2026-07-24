@@ -26,19 +26,18 @@ class ModelValidationMixin:
 
 
 class PersonaListSerializer(serializers.ModelSerializer):
+    nombre_completo = serializers.SerializerMethodField()
+
     class Meta:
         model = Persona
         fields = (
             "id",
-            "rut",
-            "nombres",
-            "apellidos",
-            "sexo",
+            "nombre_completo",
             "estado",
-            "telefono",
-            "email",
-            "foto",
         )
+
+    def get_nombre_completo(self, obj):
+        return f"{obj.nombres} {obj.apellidos}"
 
 
 class PersonaDetailSerializer(serializers.ModelSerializer):
@@ -103,27 +102,28 @@ class PersonaWriteSerializer(ModelValidationMixin, serializers.ModelSerializer):
 
 
 class AdultoListSerializer(serializers.ModelSerializer):
-    persona_rut = serializers.CharField(source="persona.rut", read_only=True)
     persona_nombre = serializers.SerializerMethodField()
+    persona_estado = serializers.CharField(source="persona.estado", read_only=True)
+    certificado_vigente = serializers.BooleanField(read_only=True)
 
     class Meta:
         model = Adulto
         fields = (
             "id",
             "persona",
-            "persona_rut",
             "persona_nombre",
+            "persona_estado",
             "rol_principal",
-            "certificado_inhabilidades",
             "certificado_vigencia_hasta",
+            "certificado_vigente",
         )
 
     def get_persona_nombre(self, obj):
         return f"{obj.persona.nombres} {obj.persona.apellidos}"
 
-
 class AdultoDetailSerializer(serializers.ModelSerializer):
     persona = PersonaDetailSerializer(read_only=True)
+    certificado_vigente = serializers.BooleanField(read_only=True)
 
     class Meta:
         model = Adulto
@@ -131,12 +131,11 @@ class AdultoDetailSerializer(serializers.ModelSerializer):
             "id",
             "persona",
             "rol_principal",
-            "certificado_inhabilidades",
             "certificado_vigencia_hasta",
+            "certificado_vigente",
             "created_at",
             "updated_at",
         )
-
 
 class AdultoWriteSerializer(ModelValidationMixin, serializers.ModelSerializer):
     certificado_inhabilidades = serializers.CharField()
@@ -175,18 +174,26 @@ class AdultoWriteSerializer(ModelValidationMixin, serializers.ModelSerializer):
 
 
 class BeneficiarioListSerializer(serializers.ModelSerializer):
-    persona_rut = serializers.CharField(source="persona.rut", read_only=True)
     persona_nombre = serializers.SerializerMethodField()
+    persona_estado = serializers.CharField(source="persona.estado", read_only=True)
+    rama_nombre = serializers.CharField(source="rama_actual.nombre", read_only=True, default=None)
+    unidad_nombre = serializers.CharField(source="unidad.nombre", read_only=True, default=None)
+    grupo = serializers.IntegerField(source="unidad.grupo_id", read_only=True, default=None)
+    grupo_nombre = serializers.CharField(source="unidad.grupo.nombre_oficial", read_only=True, default=None)
 
     class Meta:
         model = Beneficiario
         fields = (
             "id",
             "persona",
-            "persona_rut",
             "persona_nombre",
+            "persona_estado",
             "rama_actual",
+            "rama_nombre",
             "unidad",
+            "unidad_nombre",
+            "grupo",
+            "grupo_nombre",
             "fecha_ingreso",
         )
 
@@ -327,25 +334,17 @@ class RegistroProgresionScoutWriteSerializer(ModelValidationMixin, serializers.M
             instance.areas.set(areas)
         return instance
 
-    def update(self, instance, validated_data):
-        for key, value in validated_data.items():
-            setattr(instance, key, value)
-        self._run_model_validation(instance)
-        instance.save()
-        return instance
-
-
 class ApoderadoListSerializer(serializers.ModelSerializer):
-    persona_rut = serializers.CharField(source="persona.rut", read_only=True)
     persona_nombre = serializers.SerializerMethodField()
+    persona_estado = serializers.CharField(source="persona.estado", read_only=True)
 
     class Meta:
         model = Apoderado
         fields = (
             "id",
             "persona",
-            "persona_rut",
             "persona_nombre",
+            "persona_estado",
             "es_miembro_comite",
             "rol_comite",
         )

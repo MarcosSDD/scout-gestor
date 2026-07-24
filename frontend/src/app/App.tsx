@@ -12,8 +12,11 @@ import { NotFoundPage } from '../features/errors/NotFoundPage'
 import { GrupoDetailPage } from '../features/grupos/GrupoDetailPage'
 import { GruposPage } from '../features/grupos/GruposPage'
 import { HealthPage } from '../features/health/HealthPage'
+import { PersonasLayout } from '../features/personas/PersonasLayout'
+import { AdultosPage, ApoderadosPage, BeneficiariosPage, PersonasPage } from '../features/personas/PersonasPages'
 import { PlaceholderPage } from '../features/placeholders/PlaceholderPage'
 import { ProfilePage } from '../features/placeholders/ProfilePage'
+import { UnidadesPage } from '../features/unidades/UnidadesPage'
 
 type AppPageProps = {
   navItemId: ShellNavItemId
@@ -72,17 +75,22 @@ function App() {
         element={(
           <RequireAuth>
             <AppPage navItemId="personas">
-              <PlaceholderPage title="Personas" description="Los listados de personas se conectaran proximamente." />
+              <PersonasLayout />
             </AppPage>
           </RequireAuth>
         )}
-      />
+      >
+        <Route index element={<PersonasPage />} />
+        <Route path="adultos" element={<AdultosPage />} />
+        <Route path="beneficiarios" element={<BeneficiariosPage />} />
+        <Route path="apoderados" element={<ApoderadosPage />} />
+      </Route>
       <Route
         path="/app/unidades"
         element={(
           <RequireAuth>
             <AppPage navItemId="unidades">
-              <PlaceholderPage title="Unidades" description="La estructura de unidades se conectara proximamente." />
+              <UnidadesPage />
             </AppPage>
           </RequireAuth>
         )}

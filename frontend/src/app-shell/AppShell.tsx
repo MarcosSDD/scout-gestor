@@ -27,6 +27,7 @@ export function AppShell({ children }: PropsWithChildren) {
       <AppHeader
         user={user}
         onMenuClick={() => setIsSidebarOpen((current) => !current)}
+        isMenuOpen={isSidebarOpen}
         onSearchClick={() => setIsSearchOpen(true)}
         onRightPanelClick={() => setIsRightPanelOpen((current) => !current)}
       />

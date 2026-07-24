@@ -7,11 +7,12 @@ import type { AuthUser } from '../features/auth/authTypes'
 type AppHeaderProps = {
   user: AuthUser | null
   onMenuClick: () => void
+  isMenuOpen: boolean
   onSearchClick: () => void
   onRightPanelClick: () => void
 }
 
-export function AppHeader({ user, onMenuClick, onSearchClick, onRightPanelClick }: AppHeaderProps) {
+export function AppHeader({ user, onMenuClick, isMenuOpen, onSearchClick, onRightPanelClick }: AppHeaderProps) {
   const initials = user?.username.slice(0, 2).toUpperCase() ?? 'WL'
   const quickLinks = getVisibleNavItems(user).filter((item) => item.showInHeader)
   const profileLink = getVisibleNavItems(user).find((item) => item.id === 'perfil')
@@ -30,7 +31,7 @@ export function AppHeader({ user, onMenuClick, onSearchClick, onRightPanelClick 
         <button className="shell-mobile-icon" type="button" onClick={onSearchClick} aria-label="Abrir busqueda">
           <Icon name="search" />
         </button>
-        <button className="shell-menu-button" type="button" onClick={onMenuClick} aria-label="Abrir menu">
+        <button className="shell-menu-button" type="button" onClick={onMenuClick} aria-label={isMenuOpen ? 'Cerrar menu' : 'Abrir menu'} aria-expanded={isMenuOpen} aria-controls="shell-sidebar">
           <Icon name="menu" />
         </button>
       </div>

@@ -1,7 +1,8 @@
 from django.db.models import Q
 from django.shortcuts import get_object_or_404
+from django.utils import timezone
 from rest_framework import status
-from rest_framework.exceptions import PermissionDenied
+from rest_framework.exceptions import PermissionDenied, ValidationError
 from rest_framework.generics import GenericAPIView
 from rest_framework.parsers import FormParser, JSONParser, MultiPartParser
 from rest_framework.views import APIView
@@ -38,7 +39,15 @@ from api.v1.access import (
     get_accessible_progresiones_qs,
 )
 from api.v1.responses import success_response
-from personas.models import Adulto, Apoderado, ApoderadoBeneficiario, AreaDesarrollo, Beneficiario, Persona, RegistroProgresionScout
+from personas.models import (
+    Adulto,
+    Apoderado,
+    ApoderadoBeneficiario,
+    AreaDesarrollo,
+    Beneficiario,
+    Persona,
+    RegistroProgresionScout,
+)
 
 
 class _ListResponseMixin:
@@ -58,6 +67,38 @@ class _ListResponseMixin:
         return success_response(data=serializer.data)
 
 
+def _integer_query_param(request, name):
+    value = request.query_params.get(name)
+    if not value:
+        return None
+    try:
+        return int(value)
+    except (TypeError, ValueError) as exc:
+        raise ValidationError({name: "Debe ser un entero valido"}) from exc
+
+
+def _boolean_query_param(request, name):
+    value = request.query_params.get(name)
+    if not value:
+        return None
+    normalized = value.strip().lower()
+    if normalized in {"true", "1", "yes", "si"}:
+        return True
+    if normalized in {"false", "0", "no"}:
+        return False
+    raise ValidationError({name: "Debe ser true o false"})
+
+
+def _filter_person_search(queryset, search, prefix="persona__"):
+    if not search:
+        return queryset
+    search = search.strip()
+    return queryset.filter(
+        Q(**{f"{prefix}nombres__icontains": search})
+        | Q(**{f"{prefix}apellidos__icontains": search})
+    )
+
+
 class PersonaListCreateView(_ListResponseMixin, GenericAPIView):
     parser_classes = [JSONParser, MultiPartParser, FormParser]
 
@@ -71,9 +112,7 @@ class PersonaListCreateView(_ListResponseMixin, GenericAPIView):
         search = self.request.query_params.get("search")
         if search:
             search = search.strip()
-            queryset = queryset.filter(
-                Q(nombres__icontains=search) | Q(apellidos__icontains=search) | Q(rut__icontains=search)
-            )
+            queryset = queryset.filter(Q(nombres__icontains=search) | Q(apellidos__icontains=search))
 
         return queryset
 
@@ -130,9 +169,28 @@ class AdultoListCreateView(_ListResponseMixin, GenericAPIView):
     queryset = Adulto.objects.select_related("persona").order_by("persona__apellidos", "persona__nombres")
 
     def get_queryset(self):
-        return get_accessible_adultos_qs(self.request.user).select_related("persona").order_by(
+        queryset = get_accessible_adultos_qs(self.request.user).select_related("persona").order_by(
             "persona__apellidos", "persona__nombres"
         )
+
+        queryset = _filter_person_search(queryset, self.request.query_params.get("search"))
+        estado = self.request.query_params.get("estado")
+        if estado:
+            queryset = queryset.filter(persona__estado=estado)
+        rol_principal = self.request.query_params.get("rol_principal")
+        if rol_principal:
+            queryset = queryset.filter(rol_principal=rol_principal)
+        certificado_vigente = _boolean_query_param(self.request, "certificado_vigente")
+        if certificado_vigente is not None:
+            comparison = "certificado_vigencia_hasta__gte" if certificado_vigente else "certificado_vigencia_hasta__lt"
+            queryset = queryset.filter(**{comparison: timezone.localdate()})
+        unidad_id = _integer_query_param(self.request, "unidad_id")
+        if unidad_id:
+            queryset = queryset.filter(asignaciones_unidad__unidad_id=unidad_id)
+        grupo_id = _integer_query_param(self.request, "grupo_id")
+        if grupo_id:
+            queryset = queryset.filter(asignaciones_unidad__unidad__grupo_id=grupo_id)
+        return queryset.distinct()
 
     def get(self, request):
         return self._list_response(self.get_queryset(), AdultoListSerializer)
@@ -176,7 +234,7 @@ class BeneficiarioListCreateView(_ListResponseMixin, GenericAPIView):
     )
 
     def get_queryset(self):
-        return get_accessible_beneficiarios_qs(self.request.user).select_related("persona", "rama_actual", "unidad").order_by(
+        return get_accessible_beneficiarios_qs(self.request.user).select_related("persona", "rama_actual", "unidad__grupo").order_by(
             "persona__apellidos",
             "persona__nombres",
         )
@@ -184,13 +242,23 @@ class BeneficiarioListCreateView(_ListResponseMixin, GenericAPIView):
     def get(self, request):
         queryset = self.get_queryset()
 
-        unidad_id = request.query_params.get("unidad_id")
+        unidad_id = _integer_query_param(request, "unidad_id")
         if unidad_id:
             queryset = queryset.filter(unidad_id=unidad_id)
 
-        rama_id = request.query_params.get("rama_id")
+        rama_id = _integer_query_param(request, "rama_id")
         if rama_id:
             queryset = queryset.filter(rama_actual_id=rama_id)
+
+        grupo_id = _integer_query_param(request, "grupo_id")
+        if grupo_id:
+            queryset = queryset.filter(unidad__grupo_id=grupo_id)
+
+        estado = request.query_params.get("estado")
+        if estado:
+            queryset = queryset.filter(persona__estado=estado)
+
+        queryset = _filter_person_search(queryset, request.query_params.get("search"))
 
         return self._list_response(queryset, BeneficiarioListSerializer)
 
@@ -305,9 +373,27 @@ class ApoderadoListCreateView(_ListResponseMixin, GenericAPIView):
     queryset = Apoderado.objects.select_related("persona").order_by("persona__apellidos", "persona__nombres")
 
     def get_queryset(self):
-        return get_accessible_apoderados_qs(self.request.user).select_related("persona").order_by(
+        queryset = get_accessible_apoderados_qs(self.request.user).select_related("persona").order_by(
             "persona__apellidos", "persona__nombres"
         )
+
+        queryset = _filter_person_search(queryset, self.request.query_params.get("search"))
+        estado = self.request.query_params.get("estado")
+        if estado:
+            queryset = queryset.filter(persona__estado=estado)
+        es_miembro_comite = _boolean_query_param(self.request, "es_miembro_comite")
+        if es_miembro_comite is not None:
+            queryset = queryset.filter(es_miembro_comite=es_miembro_comite)
+        beneficiario_id = _integer_query_param(self.request, "beneficiario_id")
+        if beneficiario_id:
+            queryset = queryset.filter(relaciones_beneficiarios__beneficiario_id=beneficiario_id)
+        unidad_id = _integer_query_param(self.request, "unidad_id")
+        if unidad_id:
+            queryset = queryset.filter(relaciones_beneficiarios__beneficiario__unidad_id=unidad_id)
+        grupo_id = _integer_query_param(self.request, "grupo_id")
+        if grupo_id:
+            queryset = queryset.filter(relaciones_beneficiarios__beneficiario__unidad__grupo_id=grupo_id)
+        return queryset.distinct()
 
     def get(self, request):
         return self._list_response(self.get_queryset(), ApoderadoListSerializer)
