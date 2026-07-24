@@ -35,7 +35,7 @@ export const shellNavItems: ShellNavItem[] = [
     icon: 'users',
     to: '/app/grupos',
     group: 'Gestion',
-    visibleWhen: ['admin', 'grupo'],
+    visibleWhen: ['admin', 'grupo', 'unidad'],
     showInHeader: true,
     showInMobile: true,
     showInRightPanel: true,

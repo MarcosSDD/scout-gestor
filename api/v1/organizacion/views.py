@@ -8,7 +8,7 @@ from rest_framework.exceptions import PermissionDenied
 from rest_framework.generics import GenericAPIView
 from rest_framework.views import APIView
 
-from api.v1.access import can_manage_group_data, get_accessible_grupos_qs
+from api.v1.access import can_manage_group_data, get_accessible_grupos_qs, get_structure_unidades_qs
 from api.v1.organizacion.serializers import (
     GrupoScoutDetailSerializer,
     GrupoScoutListSerializer,
@@ -127,7 +127,8 @@ def _calcular_edad(fecha_nacimiento):
 class GrupoScoutEstructuraView(APIView):
     def _get_grupo(self, pk):
         unidades_qs = (
-            Unidad.objects.select_related("rama")
+            get_structure_unidades_qs(self.request.user, pk)
+            .select_related("rama")
             .prefetch_related(
                 Prefetch(
                     "beneficiarios",

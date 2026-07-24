@@ -15,6 +15,14 @@ vi.mock('../features/dashboard/DashboardPage', () => ({
   DashboardPage: () => <div>Dashboard inicial mock</div>,
 }))
 
+vi.mock('../features/grupos/GruposPage', () => ({
+  GruposPage: () => <><h1>Grupos</h1><p>Grupos accesibles mock</p></>,
+}))
+
+vi.mock('../features/grupos/GrupoDetailPage', () => ({
+  GrupoDetailPage: () => <><h1>Grupo detalle</h1><p>Estructura visible mock</p></>,
+}))
+
 const authUser = {
   id: 1,
   username: 'responsable1',
@@ -125,7 +133,6 @@ describe('App', () => {
   })
 
   it.each([
-    ['/app/grupos', 'Grupos', /gestion de grupos se conectara proximamente/i],
     ['/app/personas', 'Personas', /listados de personas se conectaran proximamente/i],
     ['/app/unidades', 'Unidades', /estructura de unidades se conectara proximamente/i],
     ['/app/formacion', 'Formacion', /modulo de formacion estara disponible proximamente/i],

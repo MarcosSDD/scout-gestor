@@ -35,7 +35,7 @@ describe('AppHeader', () => {
 
     expect(screen.getByRole('link', { name: 'Dashboard' })).toBeInTheDocument()
     expect(screen.getByRole('link', { name: 'Unidades' })).toBeInTheDocument()
-    expect(screen.queryByRole('link', { name: 'Grupos' })).not.toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'Grupos' })).toBeInTheDocument()
   })
 
   it('links avatar to profile when a persona exists', () => {

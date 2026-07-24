@@ -59,4 +59,10 @@ describe('MobileBottomNav', () => {
     expect(screen.queryByRole('link', { name: 'Personas' })).not.toBeInTheDocument()
     expect(screen.queryByRole('link', { name: 'Unidades' })).not.toBeInTheDocument()
   })
+
+  it('shows groups for adults with unit scope', () => {
+    renderMobileNav(user({ unidad_roles: [{ unidad_id: 3, rol: 'COLABORADOR' }] }))
+
+    expect(screen.getByRole('link', { name: 'Grupos' })).toBeInTheDocument()
+  })
 })

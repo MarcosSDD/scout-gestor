@@ -69,6 +69,17 @@ def get_accessible_unidades_qs(user):
     return Unidad.objects.filter(id__in=unidad_ids)
 
 
+def get_structure_unidades_qs(user, group_id: int):
+    """Return only the units whose member data the user may see in a group tree."""
+    if is_full_access(user) or can_manage_group_data(user, group_id):
+        return Unidad.objects.filter(grupo_id=group_id)
+
+    unidad_ids = get_unidad_ids(user)
+    if not unidad_ids:
+        return Unidad.objects.none()
+    return Unidad.objects.filter(grupo_id=group_id, id__in=unidad_ids)
+
+
 def get_accessible_beneficiarios_qs(user):
     if is_full_access(user):
         return Beneficiario.objects.all()

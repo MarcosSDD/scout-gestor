@@ -1389,6 +1389,11 @@ class RbacApiTests(APITestCase):
             comuna="Comuna",
         )
         self.unidad = Unidad.objects.create(grupo=self.grupo, rama=self.rama, nombre="Unidad RBAC")
+        self.unidad_misma_grupo = Unidad.objects.create(
+            grupo=self.grupo,
+            rama=self.rama,
+            nombre="Unidad RBAC Mismo Grupo",
+        )
         self.grupo_otro = GrupoScout.objects.create(
             nombre_oficial="Grupo RBAC Otro",
             distrito=self.distrito,
@@ -1486,6 +1491,21 @@ class RbacApiTests(APITestCase):
             persona=persona_ben_otro,
             rama_actual=self.rama,
             unidad=self.unidad_otra,
+            fecha_ingreso=timezone.localdate(),
+        )
+        persona_ben_mismo_grupo = Persona.objects.create(
+            rut="20.000.010-4",
+            nombres="Ben",
+            apellidos="MismoGrupo",
+            fecha_nacimiento="2013-03-01",
+            sexo=SexoPersona.MASCULINO,
+            direccion="Dir",
+            telefono="10",
+        )
+        self.beneficiario_mismo_grupo = Beneficiario.objects.create(
+            persona=persona_ben_mismo_grupo,
+            rama_actual=self.rama,
+            unidad=self.unidad_misma_grupo,
             fecha_ingreso=timezone.localdate(),
         )
 
@@ -1604,6 +1624,63 @@ class RbacApiTests(APITestCase):
         ids = {item["id"] for item in response.data["data"]}
         self.assertIn(subgrupo_local.id, ids)
         self.assertNotIn(subgrupo_otro.id, ids)
+
+    def test_adulto_unidad_ve_solo_sus_unidades_en_estructura_grupo(self):
+        subgrupo_local = Subgrupo.objects.create(nombre="Patrulla Local Estructura", unidad=self.unidad)
+        Subgrupo.objects.create(nombre="Patrulla Privada", unidad=self.unidad_misma_grupo)
+        persona_adulta_privada = Persona.objects.create(
+            rut="20.000.011-2",
+            nombres="Adulta",
+            apellidos="Privada",
+            fecha_nacimiento="1980-01-01",
+            sexo=SexoPersona.FEMENINO,
+            direccion="Dir",
+            telefono="11",
+        )
+        adulta_privada = Adulto.objects.create(
+            persona=persona_adulta_privada,
+            rol_principal=RolAdulto.DIRIGENTE,
+            certificado_inhabilidades="certificados/test.pdf",
+            certificado_vigencia_hasta=timezone.localdate() + timezone.timedelta(days=30),
+        )
+        AdultoUnidadRol.objects.create(
+            unidad=self.unidad_misma_grupo,
+            adulto=adulta_privada,
+            rol=RolAdultoUnidad.ASISTENTE,
+        )
+        self._auth("colab")
+
+        response = self.client.get(reverse("v1:grupos-estructura", kwargs={"pk": self.grupo.id}))
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        estructura = response.data["data"]
+        unidades = [unidad for rama in estructura["ramas"] for unidad in rama["unidades"]]
+        unit_ids = {unidad["id"] for unidad in unidades}
+        serialized = str(estructura)
+
+        self.assertEqual(unit_ids, {self.unidad.id})
+        self.assertEqual(estructura["resumen"]["total_unidades"], 1)
+        self.assertIn(subgrupo_local.id, {item["id"] for item in unidades[0]["subgrupos"]})
+        self.assertNotIn(self.unidad_misma_grupo.id, unit_ids)
+        self.assertNotIn(self.beneficiario_mismo_grupo.persona.rut, serialized)
+        self.assertNotIn("MismoGrupo", serialized)
+        self.assertNotIn(persona_adulta_privada.rut, serialized)
+        self.assertNotIn("Privada", serialized)
+
+    def test_responsable_grupo_ve_estructura_completa(self):
+        self._auth("resp")
+
+        response = self.client.get(reverse("v1:grupos-estructura", kwargs={"pk": self.grupo.id}))
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        unit_ids = {unidad["id"] for rama in response.data["data"]["ramas"] for unidad in rama["unidades"]}
+        self.assertEqual(unit_ids, {self.unidad.id, self.unidad_misma_grupo.id})
+
+    def test_apoderado_y_usuario_sin_persona_no_acceden_estructura(self):
+        for username in ("apo", "nopersona"):
+            self._auth(username)
+            response = self.client.get(reverse("v1:grupos-estructura", kwargs={"pk": self.grupo.id}))
+            self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
 
     def test_apoderado_no_lista_beneficiarios_no_relacionados(self):
         self._auth("apo")

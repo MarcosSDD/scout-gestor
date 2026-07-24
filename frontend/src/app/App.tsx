@@ -9,6 +9,8 @@ import { useAuth } from '../features/auth/useAuth'
 import { DashboardPage } from '../features/dashboard/DashboardPage'
 import { ForbiddenPage } from '../features/errors/ForbiddenPage'
 import { NotFoundPage } from '../features/errors/NotFoundPage'
+import { GrupoDetailPage } from '../features/grupos/GrupoDetailPage'
+import { GruposPage } from '../features/grupos/GruposPage'
 import { HealthPage } from '../features/health/HealthPage'
 import { PlaceholderPage } from '../features/placeholders/PlaceholderPage'
 import { ProfilePage } from '../features/placeholders/ProfilePage'
@@ -50,7 +52,17 @@ function App() {
         element={(
           <RequireAuth>
             <AppPage navItemId="grupos">
-              <PlaceholderPage title="Grupos" description="La gestion de grupos se conectara proximamente." />
+              <GruposPage />
+            </AppPage>
+          </RequireAuth>
+        )}
+      />
+      <Route
+        path="/app/grupos/:grupoId"
+        element={(
+          <RequireAuth>
+            <AppPage navItemId="grupos">
+              <GrupoDetailPage />
             </AppPage>
           </RequireAuth>
         )}
