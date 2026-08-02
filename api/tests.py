@@ -10,6 +10,7 @@ from django.urls import reverse
 from rest_framework import status
 from rest_framework.test import APITestCase
 from PIL import Image
+from pypdf import PdfWriter
 
 from catalogos.models import ComposicionPermitida, Distrito, Rama, Zona
 from formacion.models import AdultoGradoFormacion, GradoFormacion
@@ -489,6 +490,13 @@ class PersonasUnidadesApiTests(APITestCase):
         png_bytes = buffer.getvalue()
         return SimpleUploadedFile(name, png_bytes, content_type="image/png")
 
+    def _certificado_pdf(self, name="certificado.pdf"):
+        buffer = BytesIO()
+        writer = PdfWriter()
+        writer.add_blank_page(width=72, height=72)
+        writer.write(buffer)
+        return SimpleUploadedFile(name, buffer.getvalue(), content_type="application/pdf")
+
     def test_personas_y_unidades_requieren_autenticacion(self):
         personas_response = self.client.get(reverse("v1:personas-list"))
         unidades_response = self.client.get(reverse("v1:unidades-list"))
@@ -535,7 +543,8 @@ class PersonasUnidadesApiTests(APITestCase):
 
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
         self.assertTrue(response.data["success"])
-        self.assertIn("personas/fotos/", response.data["data"]["foto"])
+        self.assertNotIn("foto", response.data["data"])
+        self.assertTrue(response.data["data"]["foto_disponible"])
 
     def test_persona_patch_actualiza_foto(self):
         self._authenticate()
@@ -549,7 +558,8 @@ class PersonasUnidadesApiTests(APITestCase):
         )
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertIn("personas/fotos/", response.data["data"]["foto"])
+        self.assertNotIn("foto", response.data["data"])
+        self.assertTrue(response.data["data"]["foto_disponible"])
 
     def test_persona_foto_rechaza_extension_no_permitida(self):
         self._authenticate()
@@ -575,10 +585,10 @@ class PersonasUnidadesApiTests(APITestCase):
             {
                 "persona": persona_id,
                 "rol_principal": RolAdulto.DIRIGENTE,
-                "certificado_inhabilidades": "certificados/test.pdf",
+                "certificado_inhabilidades": self._certificado_pdf(),
                 "certificado_vigencia_hasta": str(timezone.localdate() - timezone.timedelta(days=1)),
             },
-            format="json",
+            format="multipart",
         )
 
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
@@ -756,10 +766,10 @@ class PersonasUnidadesApiTests(APITestCase):
             {
                 "persona": persona_id,
                 "rol_principal": RolAdulto.GUIA,
-                "certificado_inhabilidades": "certificados/test.pdf",
+                "certificado_inhabilidades": self._certificado_pdf(),
                 "certificado_vigencia_hasta": str(timezone.localdate() + timezone.timedelta(days=30)),
             },
-            format="json",
+            format="multipart",
         )
         adulto_id = adulto_response.data["data"]["id"]
 
@@ -844,10 +854,10 @@ class PersonasUnidadesApiTests(APITestCase):
             {
                 "persona": persona_id,
                 "rol_principal": RolAdulto.DIRIGENTE,
-                "certificado_inhabilidades": "certificados/test.pdf",
+                "certificado_inhabilidades": self._certificado_pdf(),
                 "certificado_vigencia_hasta": str(timezone.localdate() + timezone.timedelta(days=30)),
             },
-            format="json",
+            format="multipart",
         )
 
         self.assertEqual(adulto_response.status_code, status.HTTP_400_BAD_REQUEST)
@@ -868,10 +878,10 @@ class PersonasUnidadesApiTests(APITestCase):
             {
                 "persona": persona_id,
                 "rol_principal": RolAdulto.APODERADO,
-                "certificado_inhabilidades": "certificados/test.pdf",
+                "certificado_inhabilidades": self._certificado_pdf(),
                 "certificado_vigencia_hasta": str(timezone.localdate() + timezone.timedelta(days=30)),
             },
-            format="json",
+            format="multipart",
         )
 
         self.assertEqual(adulto_response.status_code, status.HTTP_201_CREATED)
@@ -896,10 +906,10 @@ class PersonasUnidadesApiTests(APITestCase):
             {
                 "persona": persona_id,
                 "rol_principal": RolAdulto.DIRIGENTE,
-                "certificado_inhabilidades": "certificados/test.pdf",
+                "certificado_inhabilidades": self._certificado_pdf(),
                 "certificado_vigencia_hasta": str(timezone.localdate() + timezone.timedelta(days=30)),
             },
-            format="json",
+            format="multipart",
         )
         adulto_id = adulto_response.data["data"]["id"]
 

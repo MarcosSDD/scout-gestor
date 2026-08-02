@@ -3,6 +3,7 @@ from django.utils import timezone
 from rest_framework import serializers
 
 from common.validators import normalizar_rut, validar_rut
+from api.v1.access import can_view_expanded_persona_pii, can_view_operational_persona_pii
 from personas.models import (
     Adulto,
     Apoderado,
@@ -58,6 +59,23 @@ class PersonaDetailSerializer(serializers.ModelSerializer):
             "created_at",
             "updated_at",
         )
+
+    def to_representation(self, instance):
+        data = super().to_representation(instance)
+        # Files are deliberately represented only by their authenticated endpoint,
+        # never by storage URLs.
+        data.pop("foto", None)
+        user = self.context.get("request").user if self.context.get("request") else None
+        if can_view_expanded_persona_pii(user, instance):
+            data["foto_disponible"] = bool(instance.foto)
+            return data
+        if can_view_operational_persona_pii(user, instance):
+            for field in ("rut", "direccion"):
+                data.pop(field, None)
+            return data
+        for field in ("rut", "fecha_nacimiento", "direccion", "telefono", "email"):
+            data.pop(field, None)
+        return data
 
 
 class PersonaWriteSerializer(ModelValidationMixin, serializers.ModelSerializer):
@@ -138,8 +156,6 @@ class AdultoDetailSerializer(serializers.ModelSerializer):
         )
 
 class AdultoWriteSerializer(ModelValidationMixin, serializers.ModelSerializer):
-    certificado_inhabilidades = serializers.CharField()
-
     class Meta:
         model = Adulto
         fields = (
@@ -219,8 +235,13 @@ class BeneficiarioDetailSerializer(serializers.ModelSerializer):
         )
 
     def get_registros_progresion_recientes(self, obj):
+        request = self.context.get("request")
+        from api.v1.access import can_edit_beneficiario
+
+        if not request or not can_edit_beneficiario(request.user, obj):
+            return []
         registros = obj.registros_progresion.prefetch_related("areas").all()[:5]
-        return RegistroProgresionScoutListSerializer(registros, many=True).data
+        return RegistroProgresionScoutListSerializer(registros, many=True, context=self.context).data
 
 
 class BeneficiarioWriteSerializer(ModelValidationMixin, serializers.ModelSerializer):
@@ -241,6 +262,13 @@ class BeneficiarioWriteSerializer(ModelValidationMixin, serializers.ModelSeriali
 
     def create(self, validated_data):
         instance = Beneficiario(**validated_data)
+        self._run_model_validation(instance)
+        instance.save()
+        return instance
+
+    def update(self, instance, validated_data):
+        for key, value in validated_data.items():
+            setattr(instance, key, value)
         self._run_model_validation(instance)
         instance.save()
         return instance

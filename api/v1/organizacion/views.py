@@ -157,6 +157,7 @@ class GrupoScoutEstructuraView(APIView):
 
     def get(self, request, pk):
         grupo = self._get_grupo(pk)
+        can_view_extended_pii = can_manage_group_data(request.user, grupo.id)
 
         ramas = defaultdict(
             lambda: {
@@ -200,11 +201,9 @@ class GrupoScoutEstructuraView(APIView):
                         }
                     )
 
-                beneficiarios_payload.append(
-                    {
+                beneficiario_payload = {
                         "id": beneficiario.id,
                         "persona_id": beneficiario.persona_id,
-                        "rut": beneficiario.persona.rut,
                         "nombres": beneficiario.persona.nombres,
                         "apellidos": beneficiario.persona.apellidos,
                         "sexo": beneficiario.persona.sexo,
@@ -212,25 +211,27 @@ class GrupoScoutEstructuraView(APIView):
                         "edad": edad,
                         "alertas": alertas,
                     }
-                )
+                if can_view_extended_pii:
+                    beneficiario_payload["rut"] = beneficiario.persona.rut
+                beneficiarios_payload.append(beneficiario_payload)
 
             adultos_payload = []
             for asignacion in unidad.equipo_adulto.all():
-                adultos_payload.append(
-                    {
+                adulto_payload = {
                         "id": asignacion.id,
                         "adulto_id": asignacion.adulto_id,
                         "rol": asignacion.rol,
                         "persona": {
                             "id": asignacion.adulto.persona_id,
-                            "rut": asignacion.adulto.persona.rut,
                             "nombres": asignacion.adulto.persona.nombres,
                             "apellidos": asignacion.adulto.persona.apellidos,
                             "sexo": asignacion.adulto.persona.sexo,
                             "estado": asignacion.adulto.persona.estado,
                         },
                     }
-                )
+                if can_view_extended_pii:
+                    adulto_payload["persona"]["rut"] = asignacion.adulto.persona.rut
+                adultos_payload.append(adulto_payload)
 
             subgrupos_payload = []
             for subgrupo in unidad.subgrupos.all():

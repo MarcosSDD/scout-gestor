@@ -1,4 +1,5 @@
 from django.db.models import Q
+from django.http import FileResponse
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
 from rest_framework import status
@@ -32,11 +33,14 @@ from api.v1.access import (
     can_edit_persona,
     can_edit_progresion,
     can_manage_group_data,
+    can_view_persona_photo,
     get_accessible_adultos_qs,
     get_accessible_apoderados_qs,
     get_accessible_beneficiarios_qs,
     get_accessible_personas_qs,
     get_accessible_progresiones_qs,
+    get_responsable_grupo_ids,
+    is_full_access,
 )
 from api.v1.responses import success_response
 from personas.models import (
@@ -99,6 +103,23 @@ def _filter_person_search(queryset, search, prefix="persona__"):
     )
 
 
+def _detail(serializer_class, instance, request):
+    return serializer_class(instance, context={"request": request}).data
+
+
+def _reject_immutable_relationships(request, fields):
+    prohibited = set(request.data) & set(fields)
+    if prohibited:
+        raise ValidationError({field: "Esta relacion no puede modificarse por este endpoint" for field in prohibited})
+
+
+def _private_file_response(field_file, *, attachment=False):
+    response = FileResponse(field_file.open("rb"), as_attachment=attachment, filename=field_file.name.rsplit("/", 1)[-1])
+    response["Cache-Control"] = "private, no-store"
+    response["X-Content-Type-Options"] = "nosniff"
+    return response
+
+
 class PersonaListCreateView(_ListResponseMixin, GenericAPIView):
     parser_classes = [JSONParser, MultiPartParser, FormParser]
 
@@ -127,7 +148,7 @@ class PersonaListCreateView(_ListResponseMixin, GenericAPIView):
         serializer = PersonaWriteSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         instance = serializer.save()
-        payload = PersonaDetailSerializer(instance).data
+        payload = _detail(PersonaDetailSerializer, instance, request)
         return success_response(data=payload, message="Persona creada", status_code=status.HTTP_201_CREATED)
 
 
@@ -140,7 +161,7 @@ class PersonaRetrieveUpdateView(GenericAPIView):
 
     def get(self, request, pk):
         instance = get_object_or_404(self.get_queryset(), pk=pk)
-        serializer = PersonaDetailSerializer(instance)
+        serializer = PersonaDetailSerializer(instance, context={"request": request})
         return success_response(data=serializer.data)
 
     def patch(self, request, pk):
@@ -150,7 +171,7 @@ class PersonaRetrieveUpdateView(GenericAPIView):
         serializer = PersonaWriteSerializer(instance, data=request.data, partial=True)
         serializer.is_valid(raise_exception=True)
         instance = serializer.save()
-        payload = PersonaDetailSerializer(instance).data
+        payload = _detail(PersonaDetailSerializer, instance, request)
         return success_response(data=payload, message="Persona actualizada")
 
 
@@ -166,6 +187,7 @@ class ValidarRutView(APIView):
 
 
 class AdultoListCreateView(_ListResponseMixin, GenericAPIView):
+    parser_classes = [JSONParser, MultiPartParser, FormParser]
     queryset = Adulto.objects.select_related("persona").order_by("persona__apellidos", "persona__nombres")
 
     def get_queryset(self):
@@ -201,7 +223,7 @@ class AdultoListCreateView(_ListResponseMixin, GenericAPIView):
         serializer = AdultoWriteSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         instance = serializer.save()
-        payload = AdultoDetailSerializer(instance).data
+        payload = _detail(AdultoDetailSerializer, instance, request)
         return success_response(data=payload, message="Adulto creado", status_code=status.HTTP_201_CREATED)
 
 
@@ -213,17 +235,18 @@ class AdultoRetrieveUpdateView(GenericAPIView):
 
     def get(self, request, pk):
         instance = get_object_or_404(self.get_queryset(), pk=pk)
-        serializer = AdultoDetailSerializer(instance)
+        serializer = AdultoDetailSerializer(instance, context={"request": request})
         return success_response(data=serializer.data)
 
     def patch(self, request, pk):
         instance = get_object_or_404(self.get_queryset(), pk=pk)
         if not (request.user.is_staff or request.user.is_superuser):
             raise PermissionDenied("No tiene permisos para editar adultos")
+        _reject_immutable_relationships(request, {"persona"})
         serializer = AdultoWriteSerializer(instance, data=request.data, partial=True)
         serializer.is_valid(raise_exception=True)
         instance = serializer.save()
-        payload = AdultoDetailSerializer(instance).data
+        payload = _detail(AdultoDetailSerializer, instance, request)
         return success_response(data=payload, message="Adulto actualizado")
 
 
@@ -268,7 +291,7 @@ class BeneficiarioListCreateView(_ListResponseMixin, GenericAPIView):
         serializer = BeneficiarioWriteSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         instance = serializer.save()
-        payload = BeneficiarioDetailSerializer(instance).data
+        payload = _detail(BeneficiarioDetailSerializer, instance, request)
         return success_response(data=payload, message="Beneficiario creado", status_code=status.HTTP_201_CREATED)
 
 
@@ -284,17 +307,18 @@ class BeneficiarioRetrieveUpdateView(GenericAPIView):
 
     def get(self, request, pk):
         instance = get_object_or_404(self.get_queryset(), pk=pk)
-        serializer = BeneficiarioDetailSerializer(instance)
+        serializer = BeneficiarioDetailSerializer(instance, context={"request": request})
         return success_response(data=serializer.data)
 
     def patch(self, request, pk):
         instance = get_object_or_404(self.get_queryset(), pk=pk)
         if not can_edit_beneficiario(request.user, instance):
             raise PermissionDenied("No tiene permisos para editar este beneficiario")
+        _reject_immutable_relationships(request, {"persona", "rama_actual", "unidad"})
         serializer = BeneficiarioWriteSerializer(instance, data=request.data, partial=True)
         serializer.is_valid(raise_exception=True)
         instance = serializer.save()
-        payload = BeneficiarioDetailSerializer(instance).data
+        payload = _detail(BeneficiarioDetailSerializer, instance, request)
         return success_response(data=payload, message="Beneficiario actualizado")
 
 
@@ -343,7 +367,7 @@ class RegistroProgresionScoutListCreateView(_ListResponseMixin, GenericAPIView):
         if not can_edit_beneficiario(request.user, beneficiario):
             raise PermissionDenied("No tiene permisos para crear progresiones para este beneficiario")
         instance = serializer.save()
-        payload = RegistroProgresionScoutListSerializer(instance).data
+        payload = RegistroProgresionScoutListSerializer(instance, context={"request": request}).data
         return success_response(data=payload, message="Registro de progresion creado", status_code=status.HTTP_201_CREATED)
 
 
@@ -355,17 +379,18 @@ class RegistroProgresionScoutRetrieveUpdateView(GenericAPIView):
 
     def get(self, request, pk):
         instance = get_object_or_404(self.get_queryset(), pk=pk)
-        serializer = RegistroProgresionScoutListSerializer(instance)
+        serializer = RegistroProgresionScoutListSerializer(instance, context={"request": request})
         return success_response(data=serializer.data)
 
     def patch(self, request, pk):
         instance = get_object_or_404(self.get_queryset(), pk=pk)
         if not can_edit_progresion(request.user, instance):
             raise PermissionDenied("No tiene permisos para editar esta progresion")
+        _reject_immutable_relationships(request, {"beneficiario"})
         serializer = RegistroProgresionScoutWriteSerializer(instance, data=request.data, partial=True)
         serializer.is_valid(raise_exception=True)
         instance = serializer.save()
-        payload = RegistroProgresionScoutListSerializer(instance).data
+        payload = RegistroProgresionScoutListSerializer(instance, context={"request": request}).data
         return success_response(data=payload, message="Registro de progresion actualizado")
 
 
@@ -404,7 +429,7 @@ class ApoderadoListCreateView(_ListResponseMixin, GenericAPIView):
         serializer = ApoderadoWriteSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         instance = serializer.save()
-        payload = ApoderadoDetailSerializer(instance).data
+        payload = _detail(ApoderadoDetailSerializer, instance, request)
         return success_response(data=payload, message="Apoderado creado", status_code=status.HTTP_201_CREATED)
 
 
@@ -416,7 +441,7 @@ class ApoderadoRetrieveUpdateView(GenericAPIView):
 
     def get(self, request, pk):
         instance = get_object_or_404(self.get_queryset(), pk=pk)
-        serializer = ApoderadoDetailSerializer(instance)
+        serializer = ApoderadoDetailSerializer(instance, context={"request": request})
         return success_response(data=serializer.data)
 
     def patch(self, request, pk):
@@ -428,10 +453,13 @@ class ApoderadoRetrieveUpdateView(GenericAPIView):
         )
         if not (request.user.is_staff or request.user.is_superuser or own_apoderado):
             raise PermissionDenied("No tiene permisos para editar este apoderado")
+        _reject_immutable_relationships(request, {"persona"})
+        if own_apoderado and ({"es_miembro_comite", "rol_comite"} & set(request.data)):
+            raise PermissionDenied("No tiene permisos para editar datos de comite")
         serializer = ApoderadoWriteSerializer(instance, data=request.data, partial=True)
         serializer.is_valid(raise_exception=True)
         instance = serializer.save()
-        payload = ApoderadoDetailSerializer(instance).data
+        payload = _detail(ApoderadoDetailSerializer, instance, request)
         return success_response(data=payload, message="Apoderado actualizado")
 
 
@@ -488,8 +516,30 @@ class ApoderadoBeneficiarioRetrieveUpdateView(GenericAPIView):
         instance = get_object_or_404(self.get_queryset(), pk=pk)
         if not (request.user.is_staff or request.user.is_superuser):
             raise PermissionDenied("No tiene permisos para editar esta relacion")
+        _reject_immutable_relationships(request, {"apoderado", "beneficiario"})
         serializer = ApoderadoBeneficiarioWriteSerializer(instance, data=request.data, partial=True)
         serializer.is_valid(raise_exception=True)
         instance = serializer.save()
         payload = ApoderadoBeneficiarioListSerializer(instance).data
         return success_response(data=payload, message="Relacion actualizada")
+
+
+class PersonaFotoDownloadView(APIView):
+    def get(self, request, pk):
+        persona = get_object_or_404(Persona.objects.all(), pk=pk)
+        if not can_view_persona_photo(request.user, persona):
+            raise PermissionDenied("No tiene permisos para descargar esta foto")
+        if not persona.foto:
+            raise ValidationError({"foto": "La persona no tiene una foto disponible"})
+        return _private_file_response(persona.foto)
+
+
+class AdultoCertificadoDownloadView(APIView):
+    def get(self, request, pk):
+        adulto = get_object_or_404(Adulto.objects.select_related("persona"), pk=pk)
+        group_ids = set(adulto.asignaciones_unidad.values_list("unidad__grupo_id", flat=True))
+        if not is_full_access(request.user) and not (group_ids & set(get_responsable_grupo_ids(request.user))):
+            raise PermissionDenied("No tiene permisos para descargar este certificado")
+        if not adulto.certificado_inhabilidades:
+            raise ValidationError({"certificado_inhabilidades": "El adulto no tiene un certificado disponible"})
+        return _private_file_response(adulto.certificado_inhabilidades, attachment=True)

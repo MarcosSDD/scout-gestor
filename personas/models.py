@@ -1,8 +1,19 @@
 from django.db import models
 from django.conf import settings
+from pathlib import Path
+from uuid import uuid4
 
 from common.models import TimeStampedModel
-from common.validators import normalizar_rut, validar_foto_persona, validar_rut
+from common.validators import normalizar_rut, validar_certificado_inhabilidades, validar_foto_persona, validar_rut
+from simple_history.models import HistoricalRecords
+
+
+def private_persona_foto_upload_to(instance, filename):
+    return f"personas/fotos/{uuid4().hex}{Path(filename).suffix.lower()}"
+
+
+def private_certificado_upload_to(instance, filename):
+    return f"certificados_inhabilidades/{uuid4().hex}{Path(filename).suffix.lower()}"
 
 
 class EstadoPersona(models.TextChoices):
@@ -55,8 +66,9 @@ class Persona(TimeStampedModel):
     direccion = models.CharField(max_length=200)
     telefono = models.CharField(max_length=30)
     email = models.EmailField(blank=True)
-    foto = models.ImageField(upload_to="personas/fotos/", blank=True, null=True, validators=[validar_foto_persona])
+    foto = models.ImageField(upload_to=private_persona_foto_upload_to, blank=True, null=True, validators=[validar_foto_persona])
     estado = models.CharField(max_length=10, choices=EstadoPersona.choices, default=EstadoPersona.ACTIVO)
+    history = HistoricalRecords()
 
     class Meta:
         ordering = ["apellidos", "nombres"]
@@ -74,8 +86,9 @@ class Persona(TimeStampedModel):
 class Adulto(TimeStampedModel):
     persona = models.OneToOneField(Persona, on_delete=models.CASCADE, related_name="adulto")
     rol_principal = models.CharField(max_length=20, choices=RolAdulto.choices)
-    certificado_inhabilidades = models.FileField(upload_to="certificados_inhabilidades/")
+    certificado_inhabilidades = models.FileField(upload_to=private_certificado_upload_to, validators=[validar_certificado_inhabilidades])
     certificado_vigencia_hasta = models.DateField()
+    history = HistoricalRecords()
 
     class Meta:
         verbose_name = "Adulto"
@@ -120,6 +133,7 @@ class Apoderado(TimeStampedModel):
     persona = models.OneToOneField(Persona, on_delete=models.CASCADE, related_name="apoderado")
     es_miembro_comite = models.BooleanField(default=False)
     rol_comite = models.CharField(max_length=20, blank=True)
+    history = HistoricalRecords()
 
     class Meta:
         verbose_name = "Apoderado"
@@ -157,6 +171,7 @@ class Beneficiario(TimeStampedModel):
         related_name="beneficiarios",
     )
     fecha_ingreso = models.DateField()
+    history = HistoricalRecords()
 
     class Meta:
         verbose_name = "Beneficiario"
@@ -206,6 +221,7 @@ class RegistroProgresionScout(TimeStampedModel):
     tipo = models.CharField(max_length=20, choices=TipoRegistroProgresion.choices)
     texto = models.TextField()
     areas = models.ManyToManyField(AreaDesarrollo, related_name="registros_progresion")
+    history = HistoricalRecords(m2m_fields=[areas])
 
     class Meta:
         ordering = ["-fecha", "-created_at"]
@@ -243,6 +259,7 @@ class ApoderadoBeneficiario(TimeStampedModel):
     parentesco = models.CharField(max_length=20, choices=Parentesco.choices)
     autoriza_salidas_terreno = models.BooleanField(default=False)
     fecha_autorizacion = models.DateField(null=True, blank=True)
+    history = HistoricalRecords()
 
     class Meta:
         constraints = [

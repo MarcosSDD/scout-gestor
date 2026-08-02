@@ -150,7 +150,19 @@ def get_accessible_personas_qs(user):
 def get_accessible_progresiones_qs(user):
     if is_full_access(user):
         return RegistroProgresionScout.objects.all()
-    return RegistroProgresionScout.objects.filter(beneficiario__in=get_accessible_beneficiarios_qs(user)).distinct()
+    return RegistroProgresionScout.objects.filter(beneficiario__in=get_editable_beneficiarios_qs(user)).distinct()
+
+
+def get_editable_beneficiarios_qs(user):
+    """Beneficiaries whose operational/progression data the actor may manage."""
+    if is_full_access(user):
+        return Beneficiario.objects.all()
+    group_ids = get_responsable_grupo_ids(user)
+    unit_ids = get_editable_unidad_ids(user)
+    filters = Q(unidad_id__in=unit_ids)
+    if group_ids:
+        filters |= Q(unidad__grupo_id__in=group_ids)
+    return Beneficiario.objects.filter(filters).distinct()
 
 
 def can_manage_group_data(user, group_id: int) -> bool:
@@ -160,14 +172,7 @@ def can_manage_group_data(user, group_id: int) -> bool:
 
 
 def can_edit_beneficiario(user, beneficiario: Beneficiario) -> bool:
-    if is_full_access(user):
-        return True
-    unidad_id = beneficiario.unidad_id
-    if not unidad_id:
-        return False
-    if can_manage_group_data(user, beneficiario.unidad.grupo_id):
-        return True
-    return unidad_id in set(get_editable_unidad_ids(user))
+    return get_editable_beneficiarios_qs(user).filter(pk=beneficiario.pk).exists()
 
 
 def can_edit_progresion(user, progresion: RegistroProgresionScout) -> bool:
@@ -191,6 +196,58 @@ def can_edit_persona(user, persona: Persona) -> bool:
             persona.apoderado.relaciones_beneficiarios.values_list("beneficiario__unidad__grupo_id", flat=True).first()
         )
     return bool(grupo_id and can_manage_group_data(user, grupo_id))
+
+
+def can_view_persona_photo(user, persona: Persona) -> bool:
+    """Return whether the actor may download a person's private photo."""
+    if is_full_access(user):
+        return True
+
+    user_persona = get_user_persona(user)
+    if not user_persona:
+        return False
+    if user_persona.pk == persona.pk:
+        return True
+
+    if hasattr(persona, "beneficiario") and hasattr(user_persona, "apoderado"):
+        if persona.beneficiario.relaciones_apoderados.filter(apoderado=user_persona.apoderado).exists():
+            return True
+
+    return bool(get_persona_group_ids(persona) & set(get_responsable_grupo_ids(user)))
+
+
+def get_persona_group_ids(persona: Persona) -> set[int]:
+    group_ids = set()
+    if hasattr(persona, "beneficiario") and persona.beneficiario.unidad_id:
+        group_ids.add(persona.beneficiario.unidad.grupo_id)
+    if hasattr(persona, "adulto"):
+        group_ids.update(persona.adulto.asignaciones_unidad.values_list("unidad__grupo_id", flat=True))
+    if hasattr(persona, "apoderado"):
+        group_ids.update(
+            persona.apoderado.relaciones_beneficiarios.exclude(beneficiario__unidad__isnull=True).values_list(
+                "beneficiario__unidad__grupo_id", flat=True
+            )
+        )
+    return group_ids
+
+
+def can_view_expanded_persona_pii(user, persona: Persona) -> bool:
+    if is_full_access(user):
+        return True
+    # Guardians need their own contact data to update it; other unit roles do
+    # not gain broader PII merely by viewing their own personnel record.
+    if get_user_persona(user) == persona and hasattr(persona, "apoderado"):
+        return True
+    return bool(get_persona_group_ids(persona) & set(get_responsable_grupo_ids(user)))
+
+
+def can_view_operational_persona_pii(user, persona: Persona) -> bool:
+    if can_view_expanded_persona_pii(user, persona):
+        return True
+    return bool(
+        get_persona_group_ids(persona)
+        & set(Unidad.objects.filter(id__in=get_editable_unidad_ids(user)).values_list("grupo_id", flat=True))
+    )
 
 
 def can_view_dashboard_group(user, group_id: int) -> bool:

@@ -1,10 +1,11 @@
 from django.shortcuts import get_object_or_404
 from rest_framework import status
-from rest_framework.exceptions import PermissionDenied
+from rest_framework.exceptions import PermissionDenied, ValidationError
 from rest_framework.generics import GenericAPIView
 
 from api.v1.access import (
     can_manage_group_data,
+    get_accessible_adultos_qs,
     get_accessible_subgrupo_miembros_qs,
     get_accessible_subgrupos_qs,
     get_accessible_unidades_qs,
@@ -40,6 +41,12 @@ class _ListResponseMixin:
 
         serializer = serializer_class(queryset, many=True)
         return success_response(data=serializer.data)
+
+
+def _reject_immutable_relationships(request, fields):
+    prohibited = set(request.data) & set(fields)
+    if prohibited:
+        raise ValidationError({field: "Esta relacion no puede modificarse por este endpoint" for field in prohibited})
 
 
 class UnidadListCreateView(_ListResponseMixin, GenericAPIView):
@@ -97,6 +104,7 @@ class UnidadRetrieveUpdateView(GenericAPIView):
         instance = get_object_or_404(self.get_queryset(), pk=pk)
         if not can_manage_group_data(request.user, instance.grupo_id):
             raise PermissionDenied("No tiene permisos para editar esta unidad")
+        _reject_immutable_relationships(request, {"grupo", "rama"})
         serializer = UnidadWriteSerializer(instance, data=request.data, partial=True)
         serializer.is_valid(raise_exception=True)
         instance = serializer.save()
@@ -134,6 +142,8 @@ class AdultoUnidadRolListCreateView(_ListResponseMixin, GenericAPIView):
             raise PermissionDenied("No tiene permisos para asignar adultos en esta unidad")
         serializer = AdultoUnidadRolWriteSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
+        if not get_accessible_adultos_qs(request.user).filter(pk=serializer.validated_data["adulto"].pk).exists():
+            raise PermissionDenied("No tiene permisos para asignar este adulto")
         instance = serializer.save()
         payload = AdultoUnidadRolListSerializer(instance).data
         return success_response(data=payload, message="Asignacion creada", status_code=status.HTTP_201_CREATED)
@@ -156,6 +166,7 @@ class AdultoUnidadRolRetrieveUpdateView(GenericAPIView):
         instance = get_object_or_404(self.get_queryset(), pk=pk)
         if not can_manage_group_data(request.user, instance.unidad.grupo_id):
             raise PermissionDenied("No tiene permisos para editar esta asignacion")
+        _reject_immutable_relationships(request, {"unidad", "adulto"})
         serializer = AdultoUnidadRolWriteSerializer(instance, data=request.data, partial=True)
         serializer.is_valid(raise_exception=True)
         instance = serializer.save()
@@ -211,6 +222,7 @@ class SubgrupoRetrieveUpdateView(GenericAPIView):
         instance = get_object_or_404(self.get_queryset(), pk=pk)
         if not can_manage_group_data(request.user, instance.unidad.grupo_id):
             raise PermissionDenied("No tiene permisos para editar este subgrupo")
+        _reject_immutable_relationships(request, {"unidad"})
         serializer = SubgrupoWriteSerializer(instance, data=request.data, partial=True)
         serializer.is_valid(raise_exception=True)
         instance = serializer.save()
@@ -273,6 +285,7 @@ class SubgrupoMiembroRetrieveUpdateView(GenericAPIView):
         editable_unidad_ids = set(get_editable_unidad_ids(request.user))
         if not can_manage_group_data(request.user, instance.subgrupo.unidad.grupo_id) and instance.subgrupo.unidad_id not in editable_unidad_ids:
             raise PermissionDenied("No tiene permisos para editar este miembro")
+        _reject_immutable_relationships(request, {"subgrupo", "beneficiario"})
         serializer = SubgrupoMiembroWriteSerializer(instance, data=request.data, partial=True)
         serializer.is_valid(raise_exception=True)
         instance = serializer.save()

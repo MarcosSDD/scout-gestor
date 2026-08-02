@@ -2,6 +2,7 @@ from django.db import models
 
 from catalogos.models import ComposicionPermitida
 from common.models import TimeStampedModel
+from simple_history.models import HistoricalRecords
 
 
 class EstadoUnidad(models.TextChoices):
@@ -26,6 +27,7 @@ class Unidad(TimeStampedModel):
     )
     estado = models.CharField(max_length=10, choices=EstadoUnidad.choices, default=EstadoUnidad.ACTIVA)
     cupo_maximo = models.PositiveIntegerField(null=True, blank=True)
+    history = HistoricalRecords()
 
     class Meta:
         ordering = ["nombre"]
@@ -52,6 +54,7 @@ class Subgrupo(TimeStampedModel):
         blank=True,
         related_name="subgrupos_liderados",
     )
+    history = HistoricalRecords()
 
     class Meta:
         constraints = [
@@ -73,6 +76,7 @@ class Subgrupo(TimeStampedModel):
 class SubgrupoMiembro(TimeStampedModel):
     subgrupo = models.ForeignKey(Subgrupo, on_delete=models.CASCADE, related_name="miembros")
     beneficiario = models.ForeignKey("personas.Beneficiario", on_delete=models.CASCADE, related_name="membresias_subgrupo")
+    history = HistoricalRecords()
 
     class Meta:
         constraints = [
@@ -106,6 +110,7 @@ class AdultoUnidadRol(TimeStampedModel):
     unidad = models.ForeignKey(Unidad, on_delete=models.CASCADE, related_name="equipo_adulto")
     adulto = models.ForeignKey("personas.Adulto", on_delete=models.PROTECT, related_name="asignaciones_unidad")
     rol = models.CharField(max_length=20, choices=RolAdultoUnidad.choices)
+    history = HistoricalRecords()
 
     class Meta:
         constraints = [
