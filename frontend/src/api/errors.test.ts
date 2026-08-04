@@ -20,7 +20,7 @@ describe('toApiError', () => {
       message: 'Request failed with status code 403',
     }
 
-    expect(toApiError(axiosError)).toEqual(backendError)
+    expect(toApiError(axiosError)).toEqual({ ...backendError, error: { ...backendError.error, status: 403 } })
   })
 
   it('normalizes axios network/unknown response errors', () => {

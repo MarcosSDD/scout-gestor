@@ -13,9 +13,12 @@ import { GrupoDetailPage } from '../features/grupos/GrupoDetailPage'
 import { GruposPage } from '../features/grupos/GruposPage'
 import { HealthPage } from '../features/health/HealthPage'
 import { PersonasLayout } from '../features/personas/PersonasLayout'
+import { AdultoDetailPage, ApoderadoDetailPage, BeneficiarioDetailPage, OwnPersonaPage, PersonaDetailPage } from '../features/personas/PersonaDetailPages'
 import { AdultosPage, ApoderadosPage, BeneficiariosPage, PersonasPage } from '../features/personas/PersonasPages'
+import { AsignacionFormPage, BeneficiarioFormPage, CertificadoFormPage, PersonaFormPage } from '../features/personas/PersonaForms'
+import { ProgresionFormPage, ProgresionesPage } from '../features/personas/ProgresionPages'
 import { PlaceholderPage } from '../features/placeholders/PlaceholderPage'
-import { ProfilePage } from '../features/placeholders/ProfilePage'
+import { UnidadDetailPage } from '../features/unidades/UnidadDetailPage'
 import { UnidadesPage } from '../features/unidades/UnidadesPage'
 
 type AppPageProps = {
@@ -82,8 +85,19 @@ function App() {
       >
         <Route index element={<PersonasPage />} />
         <Route path="adultos" element={<AdultosPage />} />
+        <Route path="adultos/:adultoId" element={<AdultoDetailPage />} />
+        <Route path="adultos/:adultoId/certificado" element={<CertificadoFormPage />} />
         <Route path="beneficiarios" element={<BeneficiariosPage />} />
+        <Route path="beneficiarios/:beneficiarioId" element={<BeneficiarioDetailPage />} />
+        <Route path="beneficiarios/:beneficiarioId/editar" element={<BeneficiarioFormPage />} />
+        <Route path="beneficiarios/:beneficiarioId/asignacion" element={<AsignacionFormPage />} />
+        <Route path="beneficiarios/:beneficiarioId/progresiones" element={<ProgresionesPage />} />
+        <Route path="beneficiarios/:beneficiarioId/progresiones/nuevo" element={<ProgresionFormPage />} />
+        <Route path="beneficiarios/:beneficiarioId/progresiones/:progresionId/editar" element={<ProgresionFormPage />} />
         <Route path="apoderados" element={<ApoderadosPage />} />
+        <Route path="apoderados/:apoderadoId" element={<ApoderadoDetailPage />} />
+        <Route path=":personaId" element={<PersonaDetailPage />} />
+        <Route path=":personaId/editar" element={<PersonaFormPage />} />
       </Route>
       <Route
         path="/app/unidades"
@@ -91,6 +105,17 @@ function App() {
           <RequireAuth>
             <AppPage navItemId="unidades">
               <UnidadesPage />
+            </AppPage>
+          </RequireAuth>
+        )}
+      />
+      <Route path="/app/perfil/editar" element={<RequireAuth><AppPage navItemId="perfil"><PersonaFormPage /></AppPage></RequireAuth>} />
+      <Route
+        path="/app/unidades/:unidadId"
+        element={(
+          <RequireAuth>
+            <AppPage navItemId="unidades">
+              <UnidadDetailPage />
             </AppPage>
           </RequireAuth>
         )}
@@ -110,7 +135,7 @@ function App() {
         element={(
           <RequireAuth>
             <AppPage navItemId="perfil">
-              <ProfilePage />
+              <OwnPersonaPage />
             </AppPage>
           </RequireAuth>
         )}

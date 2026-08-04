@@ -1,4 +1,5 @@
 import { httpClient } from '../../api/httpClient'
+import { resetSessionExpiredNotification } from './sessionEvents'
 import type { AuthUser, LoginData, RefreshTokenData } from './authTypes'
 
 const REFRESH_TOKEN_KEY = 'scout-gestor.refreshToken'
@@ -19,6 +20,7 @@ export function getStoredRefreshToken() {
 }
 
 export function setAuthTokens(data: RefreshTokenData) {
+  resetSessionExpiredNotification()
   accessToken = data.access
   sessionStorage.setItem(REFRESH_TOKEN_KEY, data.refresh)
   httpClient.defaults.headers.common.Authorization = `Bearer ${data.access}`

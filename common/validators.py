@@ -1,4 +1,5 @@
 import re
+import warnings
 from pathlib import Path
 
 from PIL import Image, UnidentifiedImageError
@@ -85,13 +86,17 @@ def validar_foto_persona(value) -> None:
 
     try:
         value.seek(0)
-        with Image.open(value) as image:
-            image.verify()
+        with warnings.catch_warnings():
+            warnings.simplefilter("error", Image.DecompressionBombWarning)
+            with Image.open(value) as image:
+                image.verify()
         value.seek(0)
-        with Image.open(value) as image:
-            width, height = image.size
+        with warnings.catch_warnings():
+            warnings.simplefilter("error", Image.DecompressionBombWarning)
+            with Image.open(value) as image:
+                width, height = image.size
         value.seek(0)
-    except (UnidentifiedImageError, OSError, ValueError) as exc:
+    except (Image.DecompressionBombError, Image.DecompressionBombWarning, UnidentifiedImageError, OSError, ValueError) as exc:
         raise ValidationError("La foto no contiene una imagen valida") from exc
 
     if width > PERSONA_FOTO_MAX_DIMENSION or height > PERSONA_FOTO_MAX_DIMENSION or width * height > PERSONA_FOTO_MAX_PIXELS:

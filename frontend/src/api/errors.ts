@@ -8,6 +8,7 @@ const DEFAULT_API_ERROR: ApiError = {
     code: 'network_or_unknown_error',
     message: 'No fue posible completar la solicitud',
     details: null,
+    status: null,
   },
 }
 
@@ -33,13 +34,17 @@ export function toApiError(error: unknown): ApiError {
     const payload = error.response?.data
 
     if (isApiErrorEnvelope(payload)) {
-      return payload
+      return {
+        ...payload,
+        error: { ...payload.error, status: error.response?.status ?? null },
+      }
     }
 
     return {
       ...DEFAULT_API_ERROR,
       error: {
         ...DEFAULT_API_ERROR.error,
+        status: error.response?.status ?? null,
         details: {
           status: error.response?.status ?? null,
           message: error.message,
@@ -52,6 +57,7 @@ export function toApiError(error: unknown): ApiError {
     ...DEFAULT_API_ERROR,
     error: {
       ...DEFAULT_API_ERROR.error,
+      status: null,
       details: error,
     },
   }

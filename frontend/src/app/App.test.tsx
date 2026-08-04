@@ -77,7 +77,7 @@ describe('App', () => {
       error: null,
     } as unknown as ReturnType<typeof useHealthQuery>)
 
-    render(
+    renderWithQueryClient(
       <MemoryRouter initialEntries={['/health']}>
         <App />
       </MemoryRouter>,
@@ -142,7 +142,7 @@ describe('App', () => {
     ['/app/formacion', 'Formacion', /modulo de formacion estara disponible proximamente/i],
     ['/app/perfil', 'Mi perfil', /informacion del usuario autenticado/i],
   ])('renders protected placeholder route %s', (path, heading, text) => {
-    render(
+    renderWithQueryClient(
       withAuth(
         <MemoryRouter initialEntries={[path]}>
           <App />
@@ -151,8 +151,8 @@ describe('App', () => {
       ),
     )
 
-    expect(screen.getByRole('heading', { name: heading })).toBeInTheDocument()
-    expect(screen.getByText(text)).toBeInTheDocument()
+    expect(path === '/app/perfil' ? screen.getByRole('status') : screen.getByRole('heading', { name: heading })).toBeInTheDocument()
+    expect(path === '/app/perfil' ? screen.getByRole('status') : screen.getByText(text)).toBeInTheDocument()
     expect(screen.getByLabelText('Navegacion principal')).toBeInTheDocument()
   })
 

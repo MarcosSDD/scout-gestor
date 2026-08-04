@@ -4,12 +4,14 @@ from rest_framework.exceptions import PermissionDenied, ValidationError
 from rest_framework.generics import GenericAPIView
 
 from api.v1.access import (
+    can_edit_unidad,
     can_manage_group_data,
     get_accessible_adultos_qs,
     get_accessible_subgrupo_miembros_qs,
     get_accessible_subgrupos_qs,
     get_accessible_unidades_qs,
     get_editable_unidad_ids,
+    get_unidad_detail_permissions,
 )
 from api.v1.responses import success_response
 from api.v1.unidades.serializers import (
@@ -98,11 +100,11 @@ class UnidadRetrieveUpdateView(GenericAPIView):
     def get(self, request, pk):
         instance = get_object_or_404(self.get_queryset(), pk=pk)
         serializer = UnidadDetailSerializer(instance)
-        return success_response(data=serializer.data)
+        return success_response(data=serializer.data, meta={"permissions": get_unidad_detail_permissions(request.user, instance)})
 
     def patch(self, request, pk):
         instance = get_object_or_404(self.get_queryset(), pk=pk)
-        if not can_manage_group_data(request.user, instance.grupo_id):
+        if not can_edit_unidad(request.user, instance):
             raise PermissionDenied("No tiene permisos para editar esta unidad")
         _reject_immutable_relationships(request, {"grupo", "rama"})
         serializer = UnidadWriteSerializer(instance, data=request.data, partial=True)

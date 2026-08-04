@@ -1,3 +1,4 @@
+from django.core.exceptions import ValidationError as DjangoValidationError
 from django.db.models import Q
 from django.http import FileResponse
 from django.shortcuts import get_object_or_404
@@ -10,6 +11,7 @@ from rest_framework.views import APIView
 
 from api.v1.personas.serializers import (
     AdultoDetailSerializer,
+    AdultoCertificadoRenewalSerializer,
     AdultoListSerializer,
     AdultoWriteSerializer,
     ApoderadoBeneficiarioListSerializer,
@@ -19,6 +21,7 @@ from api.v1.personas.serializers import (
     ApoderadoWriteSerializer,
     AreaDesarrolloSerializer,
     BeneficiarioDetailSerializer,
+    BeneficiarioAsignacionSerializer,
     BeneficiarioListSerializer,
     BeneficiarioWriteSerializer,
     PersonaDetailSerializer,
@@ -29,8 +32,15 @@ from api.v1.personas.serializers import (
     ValidarRutSerializer,
 )
 from api.v1.access import (
+    can_download_adulto_certificate,
+    can_renew_adulto_certificate,
+    can_reassign_beneficiario,
+    can_edit_adulto,
+    can_edit_apoderado,
+    can_edit_apoderado_committee,
     can_edit_beneficiario,
     can_edit_persona,
+    can_edit_persona_identity,
     can_edit_progresion,
     can_manage_group_data,
     can_view_persona_photo,
@@ -39,10 +49,13 @@ from api.v1.access import (
     get_accessible_beneficiarios_qs,
     get_accessible_personas_qs,
     get_accessible_progresiones_qs,
-    get_responsable_grupo_ids,
-    is_full_access,
+    get_adulto_detail_permissions,
+    get_apoderado_detail_permissions,
+    get_beneficiario_detail_permissions,
+    get_persona_detail_permissions,
 )
 from api.v1.responses import success_response
+from api.v1.personas.services import reassign_beneficiario, renew_adulto_certificate
 from personas.models import (
     Adulto,
     Apoderado,
@@ -113,6 +126,19 @@ def _reject_immutable_relationships(request, fields):
         raise ValidationError({field: "Esta relacion no puede modificarse por este endpoint" for field in prohibited})
 
 
+def _reject_persona_fields_for_own_guardian(request):
+    permitted = {"direccion", "telefono", "email", "foto"}
+    prohibited = set(request.data) - permitted
+    if prohibited:
+        raise ValidationError({field: "Los apoderados solo pueden modificar sus datos de contacto y foto" for field in prohibited})
+
+
+def _reject_unexpected_fields(request, allowed_fields):
+    unexpected = set(request.data) - set(allowed_fields)
+    if unexpected:
+        raise ValidationError({field: "Este campo no puede modificarse por este endpoint" for field in unexpected})
+
+
 def _private_file_response(field_file, *, attachment=False):
     response = FileResponse(field_file.open("rb"), as_attachment=attachment, filename=field_file.name.rsplit("/", 1)[-1])
     response["Cache-Control"] = "private, no-store"
@@ -162,12 +188,14 @@ class PersonaRetrieveUpdateView(GenericAPIView):
     def get(self, request, pk):
         instance = get_object_or_404(self.get_queryset(), pk=pk)
         serializer = PersonaDetailSerializer(instance, context={"request": request})
-        return success_response(data=serializer.data)
+        return success_response(data=serializer.data, meta={"permissions": get_persona_detail_permissions(request.user, instance)})
 
     def patch(self, request, pk):
         instance = get_object_or_404(self.get_queryset(), pk=pk)
         if not can_edit_persona(request.user, instance):
             raise PermissionDenied("No tiene permisos para editar esta persona")
+        if not can_edit_persona_identity(request.user, instance):
+            _reject_persona_fields_for_own_guardian(request)
         serializer = PersonaWriteSerializer(instance, data=request.data, partial=True)
         serializer.is_valid(raise_exception=True)
         instance = serializer.save()
@@ -236,11 +264,11 @@ class AdultoRetrieveUpdateView(GenericAPIView):
     def get(self, request, pk):
         instance = get_object_or_404(self.get_queryset(), pk=pk)
         serializer = AdultoDetailSerializer(instance, context={"request": request})
-        return success_response(data=serializer.data)
+        return success_response(data=serializer.data, meta={"permissions": get_adulto_detail_permissions(request.user, instance)})
 
     def patch(self, request, pk):
         instance = get_object_or_404(self.get_queryset(), pk=pk)
-        if not (request.user.is_staff or request.user.is_superuser):
+        if not can_edit_adulto(request.user, instance):
             raise PermissionDenied("No tiene permisos para editar adultos")
         _reject_immutable_relationships(request, {"persona"})
         serializer = AdultoWriteSerializer(instance, data=request.data, partial=True)
@@ -302,13 +330,13 @@ class BeneficiarioRetrieveUpdateView(GenericAPIView):
 
     def get_queryset(self):
         return get_accessible_beneficiarios_qs(self.request.user).select_related(
-            "persona", "rama_actual", "unidad"
+            "persona", "rama_actual", "unidad__grupo"
         ).prefetch_related("registros_progresion__areas")
 
     def get(self, request, pk):
         instance = get_object_or_404(self.get_queryset(), pk=pk)
         serializer = BeneficiarioDetailSerializer(instance, context={"request": request})
-        return success_response(data=serializer.data)
+        return success_response(data=serializer.data, meta={"permissions": get_beneficiario_detail_permissions(request.user, instance)})
 
     def patch(self, request, pk):
         instance = get_object_or_404(self.get_queryset(), pk=pk)
@@ -320,6 +348,26 @@ class BeneficiarioRetrieveUpdateView(GenericAPIView):
         instance = serializer.save()
         payload = _detail(BeneficiarioDetailSerializer, instance, request)
         return success_response(data=payload, message="Beneficiario actualizado")
+
+
+class BeneficiarioAsignacionView(GenericAPIView):
+    queryset = Beneficiario.objects.select_related("persona", "unidad__grupo")
+
+    def patch(self, request, pk):
+        beneficiario = get_object_or_404(self.queryset, pk=pk)
+        _reject_unexpected_fields(request, {"rama_actual", "unidad"})
+        serializer = BeneficiarioAsignacionSerializer(beneficiario, data=request.data)
+        serializer.is_valid(raise_exception=True)
+        destination = serializer.validated_data["unidad"]
+        if not can_reassign_beneficiario(request.user, beneficiario, destination):
+            raise PermissionDenied("No tiene permisos para reasignar este beneficiario")
+        try:
+            beneficiario = reassign_beneficiario(user=request.user, beneficiario=beneficiario, data=serializer.validated_data)
+        except DjangoValidationError as exc:
+            details = exc.message_dict if hasattr(exc, "message_dict") else {"non_field_errors": exc.messages}
+            raise ValidationError(details) from exc
+        payload = _detail(BeneficiarioDetailSerializer, beneficiario, request)
+        return success_response(data=payload, message="Asignacion de beneficiario actualizada")
 
 
 class AreaDesarrolloListView(_ListResponseMixin, GenericAPIView):
@@ -380,7 +428,7 @@ class RegistroProgresionScoutRetrieveUpdateView(GenericAPIView):
     def get(self, request, pk):
         instance = get_object_or_404(self.get_queryset(), pk=pk)
         serializer = RegistroProgresionScoutListSerializer(instance, context={"request": request})
-        return success_response(data=serializer.data)
+        return success_response(data=serializer.data, meta={"permissions": {"can_edit": can_edit_progresion(request.user, instance)}})
 
     def patch(self, request, pk):
         instance = get_object_or_404(self.get_queryset(), pk=pk)
@@ -442,19 +490,14 @@ class ApoderadoRetrieveUpdateView(GenericAPIView):
     def get(self, request, pk):
         instance = get_object_or_404(self.get_queryset(), pk=pk)
         serializer = ApoderadoDetailSerializer(instance, context={"request": request})
-        return success_response(data=serializer.data)
+        return success_response(data=serializer.data, meta={"permissions": get_apoderado_detail_permissions(request.user, instance)})
 
     def patch(self, request, pk):
         instance = get_object_or_404(self.get_queryset(), pk=pk)
-        own_apoderado = (
-            hasattr(request.user, "persona")
-            and hasattr(request.user.persona, "apoderado")
-            and request.user.persona.apoderado.id == instance.id
-        )
-        if not (request.user.is_staff or request.user.is_superuser or own_apoderado):
+        if not can_edit_apoderado(request.user, instance):
             raise PermissionDenied("No tiene permisos para editar este apoderado")
         _reject_immutable_relationships(request, {"persona"})
-        if own_apoderado and ({"es_miembro_comite", "rol_comite"} & set(request.data)):
+        if not can_edit_apoderado_committee(request.user, instance) and ({"es_miembro_comite", "rol_comite"} & set(request.data)):
             raise PermissionDenied("No tiene permisos para editar datos de comite")
         serializer = ApoderadoWriteSerializer(instance, data=request.data, partial=True)
         serializer.is_valid(raise_exception=True)
@@ -535,11 +578,27 @@ class PersonaFotoDownloadView(APIView):
 
 
 class AdultoCertificadoDownloadView(APIView):
+    parser_classes = [MultiPartParser, FormParser]
+
     def get(self, request, pk):
         adulto = get_object_or_404(Adulto.objects.select_related("persona"), pk=pk)
-        group_ids = set(adulto.asignaciones_unidad.values_list("unidad__grupo_id", flat=True))
-        if not is_full_access(request.user) and not (group_ids & set(get_responsable_grupo_ids(request.user))):
+        if not can_download_adulto_certificate(request.user, adulto):
             raise PermissionDenied("No tiene permisos para descargar este certificado")
         if not adulto.certificado_inhabilidades:
             raise ValidationError({"certificado_inhabilidades": "El adulto no tiene un certificado disponible"})
         return _private_file_response(adulto.certificado_inhabilidades, attachment=True)
+
+    def patch(self, request, pk):
+        adulto = get_object_or_404(Adulto.objects.select_related("persona"), pk=pk)
+        if not can_renew_adulto_certificate(request.user, adulto):
+            raise PermissionDenied("No tiene permisos para renovar este certificado")
+        _reject_unexpected_fields(request, {"certificado_inhabilidades", "certificado_vigencia_hasta"})
+        serializer = AdultoCertificadoRenewalSerializer(adulto, data=request.data)
+        serializer.is_valid(raise_exception=True)
+        try:
+            adulto = renew_adulto_certificate(user=request.user, adulto=adulto, data=serializer.validated_data)
+        except DjangoValidationError as exc:
+            details = exc.message_dict if hasattr(exc, "message_dict") else {"non_field_errors": exc.messages}
+            raise ValidationError(details) from exc
+        payload = _detail(AdultoDetailSerializer, adulto, request)
+        return success_response(data=payload, message="Certificado actualizado")

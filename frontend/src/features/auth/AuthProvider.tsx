@@ -6,6 +6,7 @@ import { toApiError } from '../../api/errors'
 import { clearAuthSession, getStoredRefreshToken, setAuthSession, setAuthTokens, setCurrentUser } from './authSession'
 import { AuthContext, type AuthStatus } from './AuthContext'
 import type { AuthUser, LoginCredentials } from './authTypes'
+import { subscribeToSessionExpired } from './sessionEvents'
 
 export function AuthProvider({ children }: PropsWithChildren) {
   const queryClient = useQueryClient()
@@ -18,6 +19,8 @@ export function AuthProvider({ children }: PropsWithChildren) {
     setStatus('anonymous')
     queryClient.clear()
   }, [queryClient])
+
+  useEffect(() => subscribeToSessionExpired(clearLocalAuth), [clearLocalAuth])
 
   useEffect(() => {
     let isMounted = true

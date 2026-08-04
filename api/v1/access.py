@@ -175,8 +175,12 @@ def can_edit_beneficiario(user, beneficiario: Beneficiario) -> bool:
     return get_editable_beneficiarios_qs(user).filter(pk=beneficiario.pk).exists()
 
 
+def can_manage_beneficiario_progression(user, beneficiario: Beneficiario) -> bool:
+    return can_edit_beneficiario(user, beneficiario)
+
+
 def can_edit_progresion(user, progresion: RegistroProgresionScout) -> bool:
-    return can_edit_beneficiario(user, progresion.beneficiario)
+    return can_manage_beneficiario_progression(user, progresion.beneficiario)
 
 
 def can_edit_persona(user, persona: Persona) -> bool:
@@ -198,6 +202,21 @@ def can_edit_persona(user, persona: Persona) -> bool:
     return bool(grupo_id and can_manage_group_data(user, grupo_id))
 
 
+def can_edit_persona_identity(user, persona: Persona) -> bool:
+    """Return whether the actor may edit identity and status fields."""
+    if is_full_access(user):
+        return True
+    return bool(get_persona_group_ids(persona) & set(get_responsable_grupo_ids(user)))
+
+
+def can_edit_persona_contact(user, persona: Persona) -> bool:
+    return can_edit_persona(user, persona)
+
+
+def can_replace_persona_photo(user, persona: Persona) -> bool:
+    return can_edit_persona_contact(user, persona)
+
+
 def can_view_persona_photo(user, persona: Persona) -> bool:
     """Return whether the actor may download a person's private photo."""
     if is_full_access(user):
@@ -214,6 +233,97 @@ def can_view_persona_photo(user, persona: Persona) -> bool:
             return True
 
     return bool(get_persona_group_ids(persona) & set(get_responsable_grupo_ids(user)))
+
+
+def can_edit_adulto(user, adulto: Adulto) -> bool:
+    return is_full_access(user)
+
+
+def can_download_adulto_certificate(user, adulto: Adulto) -> bool:
+    if is_full_access(user):
+        return True
+    group_ids = set(adulto.asignaciones_unidad.values_list("unidad__grupo_id", flat=True))
+    return bool(group_ids & set(get_responsable_grupo_ids(user)))
+
+
+def can_renew_adulto_certificate(user, adulto: Adulto) -> bool:
+    return can_download_adulto_certificate(user, adulto)
+
+
+def can_reassign_beneficiario(user, beneficiario: Beneficiario, destination: Unidad) -> bool:
+    """Return whether the actor may move a beneficiary between assignments."""
+    if is_full_access(user):
+        return True
+    if not beneficiario.unidad_id:
+        return False
+
+    source_unit_id = beneficiario.unidad_id
+    destination_unit_id = destination.id
+    responsable_groups = set(get_responsable_grupo_ids(user))
+    if responsable_groups:
+        source_group_id = beneficiario.unidad.grupo_id
+        if source_group_id in responsable_groups and destination.grupo_id in responsable_groups:
+            return True
+
+    editable_unit_ids = set(get_editable_unidad_ids(user))
+    return source_unit_id in editable_unit_ids and destination_unit_id in editable_unit_ids
+
+
+def can_edit_apoderado(user, apoderado: Apoderado) -> bool:
+    user_persona = get_user_persona(user)
+    return bool(is_full_access(user) or (user_persona and getattr(user_persona, "apoderado", None) == apoderado))
+
+
+def can_edit_apoderado_committee(user, apoderado: Apoderado) -> bool:
+    return is_full_access(user)
+
+
+def can_edit_unidad(user, unidad: Unidad) -> bool:
+    return can_manage_group_data(user, unidad.grupo_id)
+
+
+def get_persona_detail_permissions(user, persona: Persona) -> dict[str, bool]:
+    return {
+        "can_edit": can_edit_persona(user, persona),
+        "can_edit_identity": can_edit_persona_identity(user, persona),
+        "can_edit_contact": can_edit_persona_contact(user, persona),
+        "can_replace_photo": can_replace_persona_photo(user, persona),
+        "can_download_photo": can_view_persona_photo(user, persona),
+    }
+
+
+def get_adulto_detail_permissions(user, adulto: Adulto) -> dict[str, bool]:
+    return {
+        "can_edit": can_edit_adulto(user, adulto),
+        "can_download_photo": can_view_persona_photo(user, adulto.persona),
+        "can_download_certificate": can_download_adulto_certificate(user, adulto),
+        "can_renew_certificate": can_renew_adulto_certificate(user, adulto),
+    }
+
+
+def get_beneficiario_detail_permissions(user, beneficiario: Beneficiario) -> dict[str, bool]:
+    return {
+        "can_edit": can_edit_beneficiario(user, beneficiario),
+        "can_download_photo": can_view_persona_photo(user, beneficiario.persona),
+        "can_manage_progression": can_manage_beneficiario_progression(user, beneficiario),
+        "can_reassign_unit": bool(beneficiario.unidad_id) and (
+            is_full_access(user)
+            or beneficiario.unidad.grupo_id in set(get_responsable_grupo_ids(user))
+            or beneficiario.unidad_id in set(get_editable_unidad_ids(user))
+        ),
+    }
+
+
+def get_apoderado_detail_permissions(user, apoderado: Apoderado) -> dict[str, bool]:
+    return {
+        "can_edit": can_edit_apoderado(user, apoderado),
+        "can_download_photo": can_view_persona_photo(user, apoderado.persona),
+        "can_edit_committee": can_edit_apoderado_committee(user, apoderado),
+    }
+
+
+def get_unidad_detail_permissions(user, unidad: Unidad) -> dict[str, bool]:
+    return {"can_edit": can_edit_unidad(user, unidad)}
 
 
 def get_persona_group_ids(persona: Persona) -> set[int]:

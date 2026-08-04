@@ -3,7 +3,12 @@ from django.utils import timezone
 from rest_framework import serializers
 
 from common.validators import normalizar_rut, validar_rut
-from api.v1.access import can_view_expanded_persona_pii, can_view_operational_persona_pii
+from api.v1.access import (
+    can_download_adulto_certificate,
+    can_view_expanded_persona_pii,
+    can_view_operational_persona_pii,
+    can_view_persona_photo,
+)
 from personas.models import (
     Adulto,
     Apoderado,
@@ -18,9 +23,9 @@ from personas.models import (
 
 
 class ModelValidationMixin:
-    def _run_model_validation(self, instance):
+    def _run_model_validation(self, instance, exclude=None):
         try:
-            instance.full_clean()
+            instance.full_clean(exclude=exclude)
         except DjangoValidationError as exc:
             details = exc.message_dict if hasattr(exc, "message_dict") else {"non_field_errors": exc.messages}
             raise serializers.ValidationError(details) from exc
@@ -42,6 +47,8 @@ class PersonaListSerializer(serializers.ModelSerializer):
 
 
 class PersonaDetailSerializer(serializers.ModelSerializer):
+    foto_disponible = serializers.SerializerMethodField()
+
     class Meta:
         model = Persona
         fields = (
@@ -54,7 +61,7 @@ class PersonaDetailSerializer(serializers.ModelSerializer):
             "direccion",
             "telefono",
             "email",
-            "foto",
+            "foto_disponible",
             "estado",
             "created_at",
             "updated_at",
@@ -62,12 +69,8 @@ class PersonaDetailSerializer(serializers.ModelSerializer):
 
     def to_representation(self, instance):
         data = super().to_representation(instance)
-        # Files are deliberately represented only by their authenticated endpoint,
-        # never by storage URLs.
-        data.pop("foto", None)
         user = self.context.get("request").user if self.context.get("request") else None
         if can_view_expanded_persona_pii(user, instance):
-            data["foto_disponible"] = bool(instance.foto)
             return data
         if can_view_operational_persona_pii(user, instance):
             for field in ("rut", "direccion"):
@@ -76,6 +79,11 @@ class PersonaDetailSerializer(serializers.ModelSerializer):
         for field in ("rut", "fecha_nacimiento", "direccion", "telefono", "email"):
             data.pop(field, None)
         return data
+
+    def get_foto_disponible(self, obj):
+        request = self.context.get("request")
+        user = request.user if request else None
+        return bool(obj.foto and can_view_persona_photo(user, obj))
 
 
 class PersonaWriteSerializer(ModelValidationMixin, serializers.ModelSerializer):
@@ -142,6 +150,7 @@ class AdultoListSerializer(serializers.ModelSerializer):
 class AdultoDetailSerializer(serializers.ModelSerializer):
     persona = PersonaDetailSerializer(read_only=True)
     certificado_vigente = serializers.BooleanField(read_only=True)
+    certificado_disponible = serializers.SerializerMethodField()
 
     class Meta:
         model = Adulto
@@ -151,9 +160,15 @@ class AdultoDetailSerializer(serializers.ModelSerializer):
             "rol_principal",
             "certificado_vigencia_hasta",
             "certificado_vigente",
+            "certificado_disponible",
             "created_at",
             "updated_at",
         )
+
+    def get_certificado_disponible(self, obj):
+        request = self.context.get("request")
+        user = request.user if request else None
+        return bool(obj.certificado_inhabilidades and can_download_adulto_certificate(user, obj))
 
 class AdultoWriteSerializer(ModelValidationMixin, serializers.ModelSerializer):
     class Meta:
@@ -189,6 +204,27 @@ class AdultoWriteSerializer(ModelValidationMixin, serializers.ModelSerializer):
         return instance
 
 
+class AdultoCertificadoRenewalSerializer(ModelValidationMixin, serializers.ModelSerializer):
+    class Meta:
+        model = Adulto
+        fields = (
+            "certificado_inhabilidades",
+            "certificado_vigencia_hasta",
+        )
+
+    def validate(self, attrs):
+        if not self.instance:
+            return attrs
+        candidate = Adulto(
+            pk=self.instance.pk,
+            persona=self.instance.persona,
+            rol_principal=self.instance.rol_principal,
+            certificado_inhabilidades=attrs.get("certificado_inhabilidades", self.instance.certificado_inhabilidades),
+            certificado_vigencia_hasta=attrs.get("certificado_vigencia_hasta", self.instance.certificado_vigencia_hasta),
+        )
+        self._run_model_validation(candidate, exclude={"id", "persona"})
+        return attrs
+
 class BeneficiarioListSerializer(serializers.ModelSerializer):
     persona_nombre = serializers.SerializerMethodField()
     persona_estado = serializers.CharField(source="persona.estado", read_only=True)
@@ -220,6 +256,9 @@ class BeneficiarioListSerializer(serializers.ModelSerializer):
 class BeneficiarioDetailSerializer(serializers.ModelSerializer):
     persona = PersonaDetailSerializer(read_only=True)
     registros_progresion_recientes = serializers.SerializerMethodField()
+    rama_nombre = serializers.CharField(source="rama_actual.nombre", read_only=True, default=None)
+    unidad_nombre = serializers.CharField(source="unidad.nombre", read_only=True, default=None)
+    grupo_nombre = serializers.CharField(source="unidad.grupo.nombre_oficial", read_only=True, default=None)
 
     class Meta:
         model = Beneficiario
@@ -227,7 +266,10 @@ class BeneficiarioDetailSerializer(serializers.ModelSerializer):
             "id",
             "persona",
             "rama_actual",
+            "rama_nombre",
             "unidad",
+            "unidad_nombre",
+            "grupo_nombre",
             "fecha_ingreso",
             "registros_progresion_recientes",
             "created_at",
@@ -273,6 +315,37 @@ class BeneficiarioWriteSerializer(ModelValidationMixin, serializers.ModelSeriali
         instance.save()
         return instance
 
+
+class BeneficiarioAsignacionSerializer(ModelValidationMixin, serializers.ModelSerializer):
+    class Meta:
+        model = Beneficiario
+        fields = (
+            "rama_actual",
+            "unidad",
+        )
+
+    def validate(self, attrs):
+        unidad = attrs.get("unidad")
+        rama_actual = attrs.get("rama_actual")
+        errors = {}
+        if unidad is None:
+            errors["unidad"] = "La unidad de destino es obligatoria"
+        if rama_actual is None:
+            errors["rama_actual"] = "La rama actual es obligatoria"
+        if unidad and rama_actual and unidad.rama_id != rama_actual.id:
+            errors["rama_actual"] = "La rama actual debe coincidir con la rama de la unidad"
+        if errors:
+            raise serializers.ValidationError(errors)
+
+        candidate = Beneficiario(
+            pk=self.instance.pk if self.instance else None,
+            persona=self.instance.persona if self.instance else None,
+            rama_actual=rama_actual,
+            unidad=unidad,
+            fecha_ingreso=self.instance.fecha_ingreso if self.instance else None,
+        )
+        self._run_model_validation(candidate, exclude={"id", "persona"})
+        return attrs
 
 class AreaDesarrolloSerializer(serializers.ModelSerializer):
     class Meta:

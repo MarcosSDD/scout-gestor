@@ -3,6 +3,7 @@ import { AxiosError, type AxiosResponse, type InternalAxiosRequestConfig } from 
 import './authInterceptor'
 import { clearAuthSession, getAccessToken, getStoredRefreshToken, setAuthTokens } from '../features/auth/authSession'
 import { httpClient } from './httpClient'
+import { subscribeToSessionExpired } from '../features/auth/sessionEvents'
 
 function axios401(config: InternalAxiosRequestConfig) {
   const response: AxiosResponse = {
@@ -142,6 +143,21 @@ describe('authInterceptor', () => {
     expect(getAccessToken()).toBeNull()
     expect(getStoredRefreshToken()).toBeNull()
     expect(httpClient.defaults.headers.common.Authorization).toBeUndefined()
+  })
+
+  it('notifies the session channel once when concurrent refresh fails', async () => {
+    setAuthTokens({ access: 'old-access', refresh: 'stored-refresh' })
+    const expired = vi.fn()
+    const unsubscribe = subscribeToSessionExpired(expired)
+    httpClient.defaults.adapter = vi.fn(async (config) => {
+      if (config.url === '/auth/token/refresh/') throw axios401(config)
+      throw axios401(config)
+    })
+
+    await Promise.allSettled([httpClient.get('/resource-a/'), httpClient.get('/resource-b/')])
+
+    expect(expired).toHaveBeenCalledTimes(1)
+    unsubscribe()
   })
 
   it('does not refresh login failures', async () => {

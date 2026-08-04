@@ -1,10 +1,11 @@
-import type { FormEvent } from 'react'
+import type { FormEvent, ReactNode } from 'react'
+import { Link } from 'react-router-dom'
 
 import type { ApiError, PaginatedMeta } from '../../api/types'
 import { GrupoStateCard } from '../grupos/GrupoStateCard'
 
 export type ListFilter = { name: string; label: string; type?: 'search' | 'select' | 'number'; options?: Array<{ value: string; label: string }> }
-export type ListColumn<T> = { label: string; render: (item: T) => string | number }
+export type ListColumn<T> = { label: string; render: (item: T) => ReactNode }
 
 type DataListPageProps<T extends { id: number }> = {
   eyebrow: string
@@ -21,10 +22,11 @@ type DataListPageProps<T extends { id: number }> = {
   onRetry: () => void
   onApplyFilters: (formData: FormData) => void
   onPageChange: (page: number) => void
+  detailPath?: (item: T) => string
 }
 
 export function DataListPage<T extends { id: number }>(props: DataListPageProps<T>) {
-  const { eyebrow, title, description, items, meta, filters, params, columns, isLoading, isError, error, onRetry, onApplyFilters, onPageChange } = props
+  const { eyebrow, title, description, items, meta, filters, params, columns, isLoading, isError, error, onRetry, onApplyFilters, onPageChange, detailPath } = props
   const page = typeof params.page === 'number' ? params.page : 1
 
   function submit(event: FormEvent<HTMLFormElement>) {
@@ -57,7 +59,7 @@ export function DataListPage<T extends { id: number }>(props: DataListPageProps<
       </form>
       {items.length === 0 ? <GrupoStateCard title={hasFilters ? 'Sin resultados' : `Sin ${title.toLowerCase()} accesibles`} message={hasFilters ? 'Prueba con otros filtros.' : 'No hay informacion disponible para tu perfil.'} /> : (
         <ul className="data-list" aria-live="polite">
-          {items.map((item) => <li className="home-card data-list__item" key={item.id}>{columns.map((column) => <div key={column.label}><span>{column.label}</span><strong>{column.render(item)}</strong></div>)}</li>)}
+          {items.map((item) => <li className="home-card data-list__item" key={item.id}>{columns.map((column, index) => <div key={column.label}><span>{column.label}</span><strong>{index === 0 && detailPath ? <Link className="data-list__detail-link" to={detailPath(item)} aria-label={`Ver ficha de ${String(column.render(item))}`}>{column.render(item)}</Link> : column.render(item)}</strong></div>)}</li>)}
         </ul>
       )}
       {(meta?.previous || meta?.next) && <nav className="grupos-pagination" aria-label={`Paginacion de ${title.toLowerCase()}`}><button type="button" disabled={!meta.previous} onClick={() => onPageChange(page - 1)}>Anterior</button><span>Pagina {page}</span><button type="button" disabled={!meta.next} onClick={() => onPageChange(page + 1)}>Siguiente</button></nav>}

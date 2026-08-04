@@ -1,6 +1,7 @@
 import axios, { type InternalAxiosRequestConfig } from 'axios'
 
 import { clearAuthSession, getStoredRefreshToken, setAuthTokens } from '../features/auth/authSession'
+import { notifySessionExpired } from '../features/auth/sessionEvents'
 import type { RefreshTokenData, RefreshTokenResponse } from '../features/auth/authTypes'
 import { httpClient } from './httpClient'
 
@@ -15,6 +16,10 @@ const AUTH_ENDPOINTS_WITHOUT_REFRESH = [
 ]
 
 let refreshPromise: Promise<RefreshTokenData> | null = null
+function endExpiredSession() {
+  clearAuthSession()
+  notifySessionExpired()
+}
 
 function shouldSkipRefresh(url?: string) {
   if (!url) {
@@ -45,7 +50,7 @@ httpClient.interceptors.response.use(
 
     const refresh = getStoredRefreshToken()
     if (!refresh) {
-      clearAuthSession()
+      endExpiredSession()
       return Promise.reject(error)
     }
 
@@ -62,7 +67,7 @@ httpClient.interceptors.response.use(
       originalRequest.headers.Authorization = `Bearer ${tokens.access}`
       return httpClient(originalRequest)
     } catch (refreshError) {
-      clearAuthSession()
+      endExpiredSession()
       return Promise.reject(refreshError)
     }
   },

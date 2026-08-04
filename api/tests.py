@@ -28,7 +28,7 @@ from personas.models import (
     SexoPersona,
     TipoRegistroProgresion,
 )
-from unidades.models import AdultoUnidadRol, RolAdultoUnidad, Subgrupo, Unidad
+from unidades.models import AdultoUnidadRol, RolAdultoUnidad, Subgrupo, SubgrupoMiembro, Unidad
 
 
 class ApiTests(APITestCase):
@@ -1493,6 +1493,8 @@ class RbacApiTests(APITestCase):
             unidad=self.unidad,
             fecha_ingreso=timezone.localdate(),
         )
+        persona_ben.foto = "personas/fotos/beneficiario-privado.png"
+        persona_ben.save(update_fields=["foto"])
         persona_ben_otro = Persona.objects.create(
             rut="20.000.009-0",
             nombres="Ben",
@@ -1603,6 +1605,114 @@ class RbacApiTests(APITestCase):
             format="json",
         )
         self.assertEqual(response_forbidden.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_apoderado_solo_puede_enviar_campos_de_contacto_y_foto(self):
+        self._auth("apo")
+
+        response = self.client.patch(
+            reverse("v1:personas-detail", kwargs={"pk": self.user_apo.persona.id}),
+            {"nombres": "Cambio no autorizado", "telefono": "999"},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("nombres", response.data["error"]["details"])
+        self.user_apo.persona.refresh_from_db()
+        self.assertEqual(self.user_apo.persona.nombres, "Apo")
+
+    def _valid_pdf(self, name="certificado.pdf"):
+        stream = BytesIO()
+        writer = PdfWriter()
+        writer.add_blank_page(width=72, height=72)
+        writer.write(stream)
+        return SimpleUploadedFile(name, stream.getvalue(), content_type="application/pdf")
+
+    def test_responsable_puede_renovar_certificado_y_preserva_rol(self):
+        adulto = self.user_asistente.persona.adulto
+        previous_role = adulto.rol_principal
+        previous_history_count = adulto.history.count()
+        self._auth("resp")
+
+        response = self.client.patch(
+            reverse("v1:adultos-certificado", kwargs={"pk": adulto.pk}),
+            {
+                "certificado_inhabilidades": self._valid_pdf("renovado.pdf"),
+                "certificado_vigencia_hasta": str(timezone.localdate() + timezone.timedelta(days=90)),
+            },
+            format="multipart",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        adulto.refresh_from_db()
+        self.assertEqual(adulto.rol_principal, previous_role)
+        self.assertNotEqual(adulto.certificado_inhabilidades.name, "certificados/test.pdf")
+        self.assertTrue(adulto.certificado_inhabilidades.storage.exists(adulto.certificado_inhabilidades.name))
+        self.assertGreater(adulto.history.count(), previous_history_count)
+        self.assertEqual(adulto.history.first().history_user, self.user_resp)
+
+    def test_asistente_no_puede_renovar_certificado(self):
+        self._auth("asis")
+
+        response = self.client.patch(
+            reverse("v1:adultos-certificado", kwargs={"pk": self.user_resp.persona.adulto.pk}),
+            {
+                "certificado_inhabilidades": self._valid_pdf(),
+                "certificado_vigencia_hasta": str(timezone.localdate() + timezone.timedelta(days=90)),
+            },
+            format="multipart",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_asistente_puede_reasignar_entre_sus_unidades_y_no_fuera_de_ellas(self):
+        AdultoUnidadRol.objects.create(
+            unidad=self.unidad_misma_grupo,
+            adulto=self.user_asistente.persona.adulto,
+            rol=RolAdultoUnidad.RESPONSABLE,
+        )
+        self._auth("asis")
+
+        allowed = self.client.patch(
+            reverse("v1:beneficiarios-asignacion", kwargs={"pk": self.beneficiario.id}),
+            {"rama_actual": self.rama.id, "unidad": self.unidad_misma_grupo.id},
+            format="json",
+        )
+        self.assertEqual(allowed.status_code, status.HTTP_200_OK)
+
+        denied = self.client.patch(
+            reverse("v1:beneficiarios-asignacion", kwargs={"pk": self.beneficiario.id}),
+            {"rama_actual": self.rama.id, "unidad": self.unidad_otra.id},
+            format="json",
+        )
+        self.assertEqual(denied.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_reasignacion_rechaza_miembro_de_subgrupo_y_rama_incompatible(self):
+        subgrupo = Subgrupo.objects.create(nombre="Patrulla", unidad=self.unidad)
+        SubgrupoMiembro.objects.create(subgrupo=subgrupo, beneficiario=self.beneficiario)
+        self._auth("staff")
+
+        stranded = self.client.patch(
+            reverse("v1:beneficiarios-asignacion", kwargs={"pk": self.beneficiario.id}),
+            {"rama_actual": self.rama.id, "unidad": self.unidad_misma_grupo.id},
+            format="json",
+        )
+        self.assertEqual(stranded.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("unidad", stranded.data["error"]["details"])
+
+    def test_reasignacion_rechaza_lider_de_subgrupo(self):
+        Subgrupo.objects.create(nombre="Patrulla Liderada", unidad=self.unidad, lider_juvenil=self.beneficiario)
+        self._auth("staff")
+
+        response = self.client.patch(
+            reverse("v1:beneficiarios-asignacion", kwargs={"pk": self.beneficiario.id}),
+            {"rama_actual": self.rama.id, "unidad": self.unidad_misma_grupo.id},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("unidad", response.data["error"]["details"])
+        self.beneficiario.refresh_from_db()
+        self.assertEqual(self.beneficiario.unidad_id, self.unidad.id)
 
     def test_responsable_grupo_puede_editar_unidad(self):
         self._auth("resp")
@@ -1717,6 +1827,137 @@ class RbacApiTests(APITestCase):
         self.assertNotIn("email", str(personas.data["data"]))
         self.assertEqual(adultos.status_code, status.HTTP_200_OK)
         self.assertNotIn("certificado_inhabilidades", str(adultos.data["data"]))
+
+    def _get_detail_permissions(self, url_name, pk):
+        response = self.client.get(reverse(url_name, kwargs={"pk": pk}))
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        permissions = response.data["meta"]["permissions"]
+        self.assertTrue(all(isinstance(value, bool) for value in permissions.values()))
+        return response, permissions
+
+    def test_staff_recibe_contratos_de_permisos_en_detalles(self):
+        self._auth("staff")
+
+        persona_response, persona_permissions = self._get_detail_permissions(
+            "v1:personas-detail", self.beneficiario.persona_id
+        )
+        adulto_response, adulto_permissions = self._get_detail_permissions(
+            "v1:adultos-detail", self.user_resp.persona.adulto.id
+        )
+        beneficiario_response, beneficiario_permissions = self._get_detail_permissions(
+            "v1:beneficiarios-detail", self.beneficiario.id
+        )
+        apoderado_response, apoderado_permissions = self._get_detail_permissions(
+            "v1:apoderados-detail", self.rel.apoderado_id
+        )
+        _, unidad_permissions = self._get_detail_permissions("v1:unidades-detail", self.unidad.id)
+
+        self.assertEqual(persona_permissions, {"can_edit": True, "can_edit_identity": True, "can_edit_contact": True, "can_replace_photo": True, "can_download_photo": True})
+        self.assertEqual(
+            adulto_permissions,
+            {"can_edit": True, "can_download_photo": True, "can_download_certificate": True, "can_renew_certificate": True},
+        )
+        self.assertEqual(
+            beneficiario_permissions,
+            {"can_edit": True, "can_download_photo": True, "can_manage_progression": True, "can_reassign_unit": True},
+        )
+        self.assertEqual(
+            apoderado_permissions,
+            {"can_edit": True, "can_download_photo": True, "can_edit_committee": True},
+        )
+        self.assertEqual(unidad_permissions, {"can_edit": True})
+        self.assertTrue(persona_response.data["data"]["foto_disponible"])
+        self.assertTrue(adulto_response.data["data"]["certificado_disponible"])
+        self.assertTrue(beneficiario_response.data["data"]["persona"]["foto_disponible"])
+        self.assertNotIn("foto", persona_response.data["data"])
+        self.assertNotIn("certificado_inhabilidades", adulto_response.data["data"])
+        self.assertEqual(beneficiario_response.data["data"]["rama_nombre"], self.rama.nombre)
+        self.assertEqual(beneficiario_response.data["data"]["unidad_nombre"], self.unidad.nombre)
+        self.assertEqual(beneficiario_response.data["data"]["grupo_nombre"], self.grupo.nombre_oficial)
+
+        serialized = str(
+            [
+                persona_response.data["data"],
+                adulto_response.data["data"],
+                beneficiario_response.data["data"],
+                apoderado_response.data["data"],
+            ]
+        )
+        self.assertNotIn("/media/", serialized)
+        self.assertNotIn("personas/fotos/", serialized)
+        self.assertNotIn("certificados/", serialized)
+
+    def test_responsable_recibe_permisos_de_su_grupo(self):
+        self._auth("resp")
+
+        _, persona_permissions = self._get_detail_permissions("v1:personas-detail", self.beneficiario.persona_id)
+        adulto_response, adulto_permissions = self._get_detail_permissions(
+            "v1:adultos-detail", self.user_asistente.persona.adulto.id
+        )
+        _, beneficiario_permissions = self._get_detail_permissions("v1:beneficiarios-detail", self.beneficiario.id)
+        _, apoderado_permissions = self._get_detail_permissions("v1:apoderados-detail", self.rel.apoderado_id)
+        _, unidad_permissions = self._get_detail_permissions("v1:unidades-detail", self.unidad.id)
+
+        self.assertEqual(persona_permissions, {"can_edit": True, "can_edit_identity": True, "can_edit_contact": True, "can_replace_photo": True, "can_download_photo": True})
+        self.assertEqual(
+            adulto_permissions,
+            {"can_edit": False, "can_download_photo": True, "can_download_certificate": True, "can_renew_certificate": True},
+        )
+        self.assertTrue(adulto_response.data["data"]["certificado_disponible"])
+        self.assertEqual(
+            beneficiario_permissions,
+            {"can_edit": True, "can_download_photo": True, "can_manage_progression": True, "can_reassign_unit": True},
+        )
+        self.assertEqual(
+            apoderado_permissions,
+            {"can_edit": False, "can_download_photo": True, "can_edit_committee": False},
+        )
+        self.assertEqual(unidad_permissions, {"can_edit": True})
+
+    def test_asistente_y_colaborador_reciben_permisos_segun_su_rol(self):
+        cases = (
+            ("asis", {"can_edit": True, "can_download_photo": False, "can_manage_progression": True, "can_reassign_unit": True}),
+            ("colab", {"can_edit": False, "can_download_photo": False, "can_manage_progression": False, "can_reassign_unit": False}),
+        )
+
+        for username, expected_beneficiario_permissions in cases:
+            with self.subTest(username=username):
+                self._auth(username)
+                persona_response, persona_permissions = self._get_detail_permissions(
+                    "v1:personas-detail", self.beneficiario.persona_id
+                )
+                _, beneficiario_permissions = self._get_detail_permissions("v1:beneficiarios-detail", self.beneficiario.id)
+                _, apoderado_permissions = self._get_detail_permissions("v1:apoderados-detail", self.rel.apoderado_id)
+                _, unidad_permissions = self._get_detail_permissions("v1:unidades-detail", self.unidad.id)
+
+                self.assertEqual(persona_permissions, {"can_edit": False, "can_edit_identity": False, "can_edit_contact": False, "can_replace_photo": False, "can_download_photo": False})
+                self.assertFalse(persona_response.data["data"]["foto_disponible"])
+                self.assertEqual(beneficiario_permissions, expected_beneficiario_permissions)
+                self.assertEqual(
+                    apoderado_permissions,
+                    {"can_edit": False, "can_download_photo": False, "can_edit_committee": False},
+                )
+                self.assertEqual(unidad_permissions, {"can_edit": False})
+
+    def test_apoderado_recibe_permisos_solo_para_su_ficha_y_beneficiario(self):
+        self._auth("apo")
+
+        _, persona_permissions = self._get_detail_permissions("v1:personas-detail", self.user_apo.persona.id)
+        beneficiario_response, beneficiario_permissions = self._get_detail_permissions(
+            "v1:beneficiarios-detail", self.beneficiario.id
+        )
+        _, apoderado_permissions = self._get_detail_permissions("v1:apoderados-detail", self.rel.apoderado_id)
+
+        self.assertEqual(persona_permissions, {"can_edit": True, "can_edit_identity": False, "can_edit_contact": True, "can_replace_photo": True, "can_download_photo": True})
+        self.assertEqual(
+            beneficiario_permissions,
+            {"can_edit": False, "can_download_photo": True, "can_manage_progression": False, "can_reassign_unit": False},
+        )
+        self.assertTrue(beneficiario_response.data["data"]["persona"]["foto_disponible"])
+        self.assertEqual(
+            apoderado_permissions,
+            {"can_edit": True, "can_download_photo": True, "can_edit_committee": False},
+        )
 
     def test_apoderado_no_lista_coapoderados(self):
         persona_coapoderado = Persona.objects.create(

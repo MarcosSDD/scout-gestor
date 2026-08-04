@@ -28,6 +28,7 @@ describe('LoginForm', () => {
             code: 'authentication_failed',
             message: 'No active account found with the given credentials',
             details: null,
+            status: 401,
           },
         }}
       />,
