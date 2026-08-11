@@ -1,4 +1,4 @@
-import { useEffect } from 'react'
+import { useEffect, useRef } from 'react'
 import { NavLink } from 'react-router-dom'
 
 import { useAuth } from '../features/auth/useAuth'
@@ -12,6 +12,8 @@ type SidebarProps = {
 }
 
 export function Sidebar({ isOpen, onClose, onLogout }: SidebarProps) {
+  const sidebarRef = useRef<HTMLElement>(null)
+  const restoreFocusRef = useRef<HTMLElement | null>(null)
   const { user } = useAuth()
   const visibleItems = getVisibleNavItems(user)
   const managementLinks = visibleItems.filter((item) => item.group === 'Gestion')
@@ -20,15 +22,25 @@ export function Sidebar({ isOpen, onClose, onLogout }: SidebarProps) {
 
   useEffect(() => {
     if (!isOpen) return undefined
-    const onKeyDown = (event: KeyboardEvent) => { if (event.key === 'Escape') onClose() }
+    restoreFocusRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null
+    const focusable = () => Array.from(sidebarRef.current?.querySelectorAll<HTMLElement>('a[href],button:not([disabled])') ?? [])
+    focusable()[0]?.focus()
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') { onClose(); return }
+      if (event.key !== 'Tab') return
+      const items = focusable(); if (!items.length) return
+      const first = items[0]; const last = items.at(-1)!
+      if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus() }
+      if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus() }
+    }
     window.addEventListener('keydown', onKeyDown)
-    return () => window.removeEventListener('keydown', onKeyDown)
+    return () => { window.removeEventListener('keydown', onKeyDown); restoreFocusRef.current?.focus(); restoreFocusRef.current = null }
   }, [isOpen, onClose])
 
   return (
     <>
       <button className={`shell-backdrop ${isOpen ? 'shell-backdrop--visible' : ''}`} type="button" aria-label="Cerrar menu" onClick={onClose} />
-      <aside id="shell-sidebar" className={`shell-sidebar ${isOpen ? 'nav-active' : ''}`} aria-label="Navegacion principal">
+      <aside ref={sidebarRef} id="shell-sidebar" className={`shell-sidebar ${isOpen ? 'nav-active' : ''}`} aria-label="Navegacion principal">
         <div className="shell-sidebar__inner">
           <NavGroup caption="Gestion" links={managementLinks} onNavigate={onClose} />
           {operationLinks.length > 0 && <NavGroup caption="Operativo" links={operationLinks} onNavigate={onClose} />}

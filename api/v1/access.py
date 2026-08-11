@@ -55,6 +55,13 @@ def get_accessible_grupos_qs(user):
     return GrupoScout.objects.filter(id__in=grupo_ids)
 
 
+def get_manageable_grupos_qs(user):
+    """Groups on which structural administration is authorized."""
+    if is_full_access(user):
+        return GrupoScout.objects.all()
+    return GrupoScout.objects.filter(id__in=get_responsable_grupo_ids(user))
+
+
 def get_accessible_unidades_qs(user):
     if is_full_access(user):
         return Unidad.objects.all()

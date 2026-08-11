@@ -1,13 +1,14 @@
 import { render } from '@testing-library/react'
+import { createMemoryRouter, RouterProvider } from 'react-router-dom'
 import { useUnsavedChanges } from './useUnsavedChanges'
 
 function Probe({ dirty }: { dirty: boolean }) { useUnsavedChanges(dirty); return null }
 describe('useUnsavedChanges', () => {
   it('registra y limpia la protección beforeunload', () => {
     const add = vi.spyOn(window, 'addEventListener'); const remove = vi.spyOn(window, 'removeEventListener')
-    const { rerender, unmount } = render(<Probe dirty />)
+    const router = createMemoryRouter([{ path: '*', element: <Probe dirty /> }], { initialEntries: ['/formulario'] })
+    const { unmount } = render(<RouterProvider router={router} />)
     expect(add).toHaveBeenCalledWith('beforeunload', expect.any(Function))
-    rerender(<Probe dirty={false} />); expect(remove).toHaveBeenCalledWith('beforeunload', expect.any(Function))
-    unmount(); add.mockRestore(); remove.mockRestore()
+    unmount(); expect(remove).toHaveBeenCalledWith('beforeunload', expect.any(Function)); add.mockRestore(); remove.mockRestore()
   })
 })

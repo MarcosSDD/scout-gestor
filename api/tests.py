@@ -809,7 +809,7 @@ class PersonasUnidadesApiTests(APITestCase):
 
         subgrupo_response = self.client.post(
             reverse("v1:subgrupos-list"),
-            {"nombre": "Patrulla Roja", "unidad": self.unidad.id, "lider_juvenil": beneficiario_id},
+            {"nombre": "Patrulla Roja", "unidad": self.unidad.id},
             format="json",
         )
         self.assertEqual(subgrupo_response.status_code, status.HTTP_201_CREATED)
@@ -822,6 +822,13 @@ class PersonasUnidadesApiTests(APITestCase):
         )
         self.assertEqual(miembro_response.status_code, status.HTTP_201_CREATED)
         self.assertTrue(miembro_response.data["success"])
+
+        lider_response = self.client.patch(
+            reverse("v1:subgrupos-detail", args=[subgrupo_id]),
+            {"lider_juvenil": beneficiario_id},
+            format="json",
+        )
+        self.assertEqual(lider_response.status_code, status.HTTP_200_OK)
 
         listado_response = self.client.get(reverse("v1:subgrupos-miembros-list"), {"subgrupo_id": subgrupo_id})
         self.assertEqual(listado_response.status_code, status.HTTP_200_OK)
@@ -1865,7 +1872,15 @@ class RbacApiTests(APITestCase):
             apoderado_permissions,
             {"can_edit": True, "can_download_photo": True, "can_edit_committee": True},
         )
-        self.assertEqual(unidad_permissions, {"can_edit": True})
+        self.assertEqual(
+            unidad_permissions,
+            {
+                "can_edit": True,
+                "can_create_subgroup": True,
+                "can_manage_memberships": True,
+                "can_manage_adult_assignments": True,
+            },
+        )
         self.assertTrue(persona_response.data["data"]["foto_disponible"])
         self.assertTrue(adulto_response.data["data"]["certificado_disponible"])
         self.assertTrue(beneficiario_response.data["data"]["persona"]["foto_disponible"])
@@ -1912,7 +1927,15 @@ class RbacApiTests(APITestCase):
             apoderado_permissions,
             {"can_edit": False, "can_download_photo": True, "can_edit_committee": False},
         )
-        self.assertEqual(unidad_permissions, {"can_edit": True})
+        self.assertEqual(
+            unidad_permissions,
+            {
+                "can_edit": True,
+                "can_create_subgroup": True,
+                "can_manage_memberships": True,
+                "can_manage_adult_assignments": True,
+            },
+        )
 
     def test_asistente_y_colaborador_reciben_permisos_segun_su_rol(self):
         cases = (
@@ -1937,7 +1960,15 @@ class RbacApiTests(APITestCase):
                     apoderado_permissions,
                     {"can_edit": False, "can_download_photo": False, "can_edit_committee": False},
                 )
-                self.assertEqual(unidad_permissions, {"can_edit": False})
+                self.assertEqual(
+                    unidad_permissions,
+                    {
+                        "can_edit": False,
+                        "can_create_subgroup": False,
+                        "can_manage_memberships": username == "asis",
+                        "can_manage_adult_assignments": False,
+                    },
+                )
 
     def test_apoderado_recibe_permisos_solo_para_su_ficha_y_beneficiario(self):
         self._auth("apo")

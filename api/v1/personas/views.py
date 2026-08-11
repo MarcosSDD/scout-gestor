@@ -55,7 +55,7 @@ from api.v1.access import (
     get_persona_detail_permissions,
 )
 from api.v1.responses import success_response
-from api.v1.personas.services import reassign_beneficiario, renew_adulto_certificate
+from api.v1.personas.services import create_beneficiario, reassign_beneficiario, renew_adulto_certificate
 from personas.models import (
     Adulto,
     Apoderado,
@@ -318,7 +318,11 @@ class BeneficiarioListCreateView(_ListResponseMixin, GenericAPIView):
             raise PermissionDenied("No tiene permisos para crear beneficiarios")
         serializer = BeneficiarioWriteSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        instance = serializer.save()
+        try:
+            instance = create_beneficiario(user=request.user, data=serializer.validated_data)
+        except DjangoValidationError as exc:
+            details = exc.message_dict if hasattr(exc, "message_dict") else {"non_field_errors": exc.messages}
+            raise ValidationError(details) from exc
         payload = _detail(BeneficiarioDetailSerializer, instance, request)
         return success_response(data=payload, message="Beneficiario creado", status_code=status.HTTP_201_CREATED)
 

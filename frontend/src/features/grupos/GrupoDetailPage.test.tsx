@@ -4,6 +4,9 @@ import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { getGrupo, getGrupoEstructura } from '../../api/gruposApi'
 import { renderWithQueryClient } from '../../test/renderWithQueryClient'
 import { GrupoDetailPage } from './GrupoDetailPage'
+import { AuthContext } from '../auth/AuthContext'
+
+const auth = { status: 'authenticated' as const, isAuthenticated: true, login: vi.fn(), logout: vi.fn(), user: { id: 1, username: 'staff', email: '', first_name: '', last_name: '', is_staff: true, is_superuser: false, persona_id: 1, responsable_grupo_ids: [], unidad_roles: [], is_apoderado: false } }
 
 vi.mock('../../api/gruposApi', () => ({ getGrupo: vi.fn(), getGrupoEstructura: vi.fn() }))
 
@@ -26,7 +29,7 @@ describe('GrupoDetailPage', () => {
       }] }],
     } })
 
-    renderWithQueryClient(<MemoryRouter initialEntries={['/app/grupos/7']}><Routes><Route path="/app/grupos/:grupoId" element={<GrupoDetailPage />} /></Routes></MemoryRouter>)
+    renderWithQueryClient(<AuthContext value={auth}><MemoryRouter initialEntries={['/app/grupos/7']}><Routes><Route path="/app/grupos/:grupoId" element={<GrupoDetailPage />} /></Routes></MemoryRouter></AuthContext>)
 
     expect(await screen.findByRole('heading', { name: 'Grupo We Lemu' })).toBeInTheDocument()
     expect(screen.getByText('Sofi Perez')).toBeInTheDocument()
@@ -35,7 +38,7 @@ describe('GrupoDetailPage', () => {
   })
 
   it('rejects invalid ids without issuing requests', async () => {
-    renderWithQueryClient(<MemoryRouter initialEntries={['/app/grupos/invalido']}><Routes><Route path="/app/grupos/:grupoId" element={<GrupoDetailPage />} /></Routes></MemoryRouter>)
+    renderWithQueryClient(<AuthContext value={auth}><MemoryRouter initialEntries={['/app/grupos/invalido']}><Routes><Route path="/app/grupos/:grupoId" element={<GrupoDetailPage />} /></Routes></MemoryRouter></AuthContext>)
 
     expect(screen.getByRole('heading', { name: 'Grupo no encontrado' })).toBeInTheDocument()
     expect(getGrupo).not.toHaveBeenCalled()

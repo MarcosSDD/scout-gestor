@@ -3,8 +3,11 @@ import { Link, useParams } from 'react-router-dom'
 import type { GrupoEstructuraUnidad } from '../../api/gruposApi'
 import { GrupoStateCard } from './GrupoStateCard'
 import { useGrupoEstructuraQuery, useGrupoQuery } from './useGruposQueries'
+import { useAuth } from '../auth/useAuth'
+import { isAdminUser, isGrupoResponsable } from '../auth/rbac'
 
 export function GrupoDetailPage() {
+  const { user } = useAuth()
   const rawGrupoId = useParams().grupoId
   const grupoId = rawGrupoId && /^\d+$/.test(rawGrupoId) ? Number(rawGrupoId) : null
   const detailQuery = useGrupoQuery(grupoId)
@@ -28,7 +31,7 @@ export function GrupoDetailPage() {
           <h1 id="grupo-detail-title">{grupo.nombre_oficial}</h1>
           <p>Ficha institucional y estructura visible segun tus permisos.</p>
         </div>
-        <span className="dashboard-status-badge">{grupo.estado_vigencia}</span>
+          <div><span className="dashboard-status-badge">{grupo.estado_vigencia}</span>{(isAdminUser(user) || isGrupoResponsable(user)) ? <Link className="secondary-link" to={`/app/unidades/nueva?grupo_id=${grupo.id}`}>Nueva unidad</Link> : null}</div>
       </article>
 
       <nav className="grupo-section-nav" aria-label="Secciones del grupo">
@@ -82,7 +85,7 @@ export function GrupoDetailPage() {
 function UnidadTree({ unidad }: { unidad: GrupoEstructuraUnidad }) {
   return (
     <details className="grupo-tree__unidad">
-      <summary>{unidad.nombre} <span>{unidad.estado} · {unidad.tipo_composicion}</span></summary>
+      <summary><Link to={`/app/unidades/${unidad.id}`}>{unidad.nombre}</Link> <span>{unidad.estado} · {unidad.tipo_composicion}</span></summary>
       <div className="grupo-tree__content">
         <section aria-label={`Beneficiarios de ${unidad.nombre}`}>
           <h3>Beneficiarios ({unidad.beneficiarios.length})</h3>

@@ -43,6 +43,15 @@ class Unidad(TimeStampedModel):
     def composicion_actual(self) -> str:
         return self.tipo_composicion or self.rama.composicion_permitida
 
+    def clean(self) -> None:
+        from django.core.exceptions import ValidationError
+        from personas.models import EstadoPersona
+
+        if self.pk and self.cupo_maximo is not None:
+            activos = self.beneficiarios.filter(persona__estado=EstadoPersona.ACTIVO).count()
+            if activos > self.cupo_maximo:
+                raise ValidationError({"cupo_maximo": "El cupo no puede ser menor que los beneficiarios activos."})
+
 
 class Subgrupo(TimeStampedModel):
     nombre = models.CharField(max_length=100)
@@ -69,8 +78,11 @@ class Subgrupo(TimeStampedModel):
     def clean(self) -> None:
         from django.core.exceptions import ValidationError
 
-        if self.lider_juvenil_id and self.lider_juvenil.unidad_id != self.unidad_id:
-            raise ValidationError({"lider_juvenil": "El lider juvenil debe pertenecer a la misma unidad"})
+        if self.lider_juvenil_id:
+            if self.lider_juvenil.unidad_id != self.unidad_id:
+                raise ValidationError({"lider_juvenil": "El lider juvenil debe pertenecer a la misma unidad"})
+            if not SubgrupoMiembro.objects.filter(subgrupo_id=self.pk, beneficiario_id=self.lider_juvenil_id).exists():
+                raise ValidationError({"lider_juvenil": "El lider juvenil debe ser miembro actual del subgrupo."})
 
 
 class SubgrupoMiembro(TimeStampedModel):
@@ -115,8 +127,8 @@ class AdultoUnidadRol(TimeStampedModel):
     class Meta:
         constraints = [
             models.UniqueConstraint(
-                fields=["unidad", "adulto", "rol"],
-                name="uq_adulto_rol_unidad",
+                fields=["unidad", "adulto"],
+                name="uq_adulto_por_unidad",
             ),
             models.UniqueConstraint(
                 fields=["unidad", "rol"],
@@ -135,6 +147,8 @@ class AdultoUnidadRol(TimeStampedModel):
 
         from personas.models import SexoPersona
 
+        if self.unidad.estado != EstadoUnidad.ACTIVA:
+            raise ValidationError({"unidad": "Solo se pueden asignar adultos a unidades activas."})
         if not self.adulto.certificado_vigente:
             raise ValidationError("No se puede asignar un adulto con certificado vencido")
 

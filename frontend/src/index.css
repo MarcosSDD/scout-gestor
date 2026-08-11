@@ -496,7 +496,7 @@ a {
 .shell-search svg {
   position: absolute;
   left: 16px;
-  color: #9aa3ad;
+  color: #56616d;
 }
 
 .shell-search input {
@@ -1419,6 +1419,13 @@ a {
 .shell-backdrop {
   display: none;
 }
+.option-picker { display: grid; gap: 10px; min-width: 0; border: 1px solid #dbe4d5; border-radius: 16px; padding: 16px; }
+.option-picker legend { color: #243024; font-weight: 900; }
+.option-picker input[type='search'] { min-height: 42px; border: 1px solid #c7d1c1; border-radius: 10px; padding: 0 12px; }
+.option-picker__options { display: grid; max-height: 220px; gap: 6px; overflow: auto; }
+.option-picker__options label { display: flex; min-height: 32px; align-items: center; gap: 8px; color: #243024; }
+.option-picker__status, .form-context { color: #4b5a50; font-size: .88rem; }
+.option-picker__pagination { display: flex; gap: 8px; }
 
 @media (max-width: 1199.98px) {
   .login-row {

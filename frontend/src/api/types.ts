@@ -35,6 +35,13 @@ export type DetailPermissions = {
   can_edit_committee?: boolean
   can_reassign_unit?: boolean
   can_renew_certificate?: boolean
+  can_create_unit?: boolean
+  can_create_subgroup?: boolean
+  can_manage_memberships?: boolean
+  can_manage_adult_assignments?: boolean
+  can_assign_leader?: boolean
+  can_reassign?: boolean
+  can_edit_role?: boolean
 }
 
 export type DetailMeta = {

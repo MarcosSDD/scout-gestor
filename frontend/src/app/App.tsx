@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react'
+import { lazy, Suspense, type ReactNode } from 'react'
 import { Navigate, Route, Routes } from 'react-router-dom'
 
 import { AppShell } from '../app-shell/AppShell'
@@ -19,6 +19,13 @@ import { AsignacionFormPage, BeneficiarioFormPage, CertificadoFormPage, PersonaF
 import { ProgresionFormPage, ProgresionesPage } from '../features/personas/ProgresionPages'
 import { PlaceholderPage } from '../features/placeholders/PlaceholderPage'
 import { UnidadDetailPage } from '../features/unidades/UnidadDetailPage'
+function StructuralPage({ page }: { page: 'unidad' | 'subgrupo' | 'miembro' | 'adulto' }) {
+  return <Suspense fallback={<p role="status">Cargando formulario…</p>}>{page === 'unidad' ? <LazyUnidadForm /> : page === 'subgrupo' ? <LazySubgrupoForm /> : page === 'miembro' ? <LazyMiembroForm /> : <LazyAdultoForm />}</Suspense>
+}
+const LazyUnidadForm = lazy(async () => ({ default: (await import('../features/unidades/StructuralForms')).UnidadFormPage }))
+const LazySubgrupoForm = lazy(async () => ({ default: (await import('../features/unidades/StructuralForms')).SubgrupoFormPage }))
+const LazyMiembroForm = lazy(async () => ({ default: (await import('../features/unidades/StructuralForms')).MiembroFormPage }))
+const LazyAdultoForm = lazy(async () => ({ default: (await import('../features/unidades/StructuralForms')).AdultoRolFormPage }))
 import { UnidadesPage } from '../features/unidades/UnidadesPage'
 
 type AppPageProps = {
@@ -53,6 +60,7 @@ function App() {
           </RequireAuth>
         )}
       />
+      <Route path="/app/unidades/nueva" element={<RequireAuth><AppPage navItemId="unidades"><StructuralPage page="unidad" /></AppPage></RequireAuth>} />
       <Route
         path="/app/grupos"
         element={(
@@ -63,6 +71,13 @@ function App() {
           </RequireAuth>
         )}
       />
+      <Route path="/app/unidades/:unidadId/editar" element={<RequireAuth><AppPage navItemId="unidades"><StructuralPage page="unidad" /></AppPage></RequireAuth>} />
+      <Route path="/app/unidades/:unidadId/subgrupos/nuevo" element={<RequireAuth><AppPage navItemId="unidades"><StructuralPage page="subgrupo" /></AppPage></RequireAuth>} />
+      <Route path="/app/unidades/:unidadId/adultos/nuevo" element={<RequireAuth><AppPage navItemId="unidades"><StructuralPage page="adulto" /></AppPage></RequireAuth>} />
+      <Route path="/app/unidades/:unidadId/subgrupos/:subgrupoId/miembros/nuevo" element={<RequireAuth><AppPage navItemId="unidades"><StructuralPage page="miembro" /></AppPage></RequireAuth>} />
+      <Route path="/app/unidades/subgrupos/:subgrupoId/editar" element={<RequireAuth><AppPage navItemId="unidades"><StructuralPage page="subgrupo" /></AppPage></RequireAuth>} />
+      <Route path="/app/unidades/miembros/:miembroId/reasignar" element={<RequireAuth><AppPage navItemId="unidades"><StructuralPage page="miembro" /></AppPage></RequireAuth>} />
+      <Route path="/app/unidades/adultos/:asignacionId/editar" element={<RequireAuth><AppPage navItemId="unidades"><StructuralPage page="adulto" /></AppPage></RequireAuth>} />
       <Route
         path="/app/grupos/:grupoId"
         element={(

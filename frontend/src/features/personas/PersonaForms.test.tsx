@@ -1,5 +1,5 @@
 import { screen } from '@testing-library/react'
-import { MemoryRouter, Route, Routes } from 'react-router-dom'
+import { createMemoryRouter, RouterProvider } from 'react-router-dom'
 import { vi } from 'vitest'
 import { AuthContext } from '../auth/AuthContext'
 import { renderWithQueryClient } from '../../test/renderWithQueryClient'
@@ -14,7 +14,8 @@ const auth = { status: 'authenticated' as const, isAuthenticated: true, login: v
 describe('PersonaFormPage', () => {
   it('usa la persona autenticada y vuelve al perfil en la ruta de edición propia', () => {
     vi.mocked(usePersonaDetailQuery).mockReturnValue({ isLoading: false, isError: false, data: { data: { id: 8, email: 'guardian@example.test' }, meta: { permissions: { can_edit_contact: true } } } } as ReturnType<typeof usePersonaDetailQuery>)
-    renderWithQueryClient(<AuthContext value={auth}><MemoryRouter initialEntries={['/app/perfil/editar']}><Routes><Route path="/app/perfil/editar" element={<PersonaFormPage />} /></Routes></MemoryRouter></AuthContext>)
+    const router = createMemoryRouter([{ path: '/app/perfil/editar', element: <PersonaFormPage /> }], { initialEntries: ['/app/perfil/editar'] })
+    renderWithQueryClient(<AuthContext value={auth}><RouterProvider router={router} /></AuthContext>)
     expect(usePersonaDetailQuery).toHaveBeenCalledWith(8)
     expect(screen.getByRole('link', { name: 'Volver' })).toHaveAttribute('href', '/app/perfil')
     expect(screen.getByLabelText('Correo')).toBeInTheDocument()

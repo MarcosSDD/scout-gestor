@@ -189,6 +189,12 @@ class Beneficiario(TimeStampedModel):
             raise ValidationError({"rama_actual": "La rama actual debe coincidir con la rama de la unidad"})
 
         if self.unidad_id:
+            if self.persona.estado == EstadoPersona.ACTIVO and self.unidad.cupo_maximo is not None:
+                activos = Beneficiario.objects.filter(
+                    unidad_id=self.unidad_id, persona__estado=EstadoPersona.ACTIVO
+                ).exclude(pk=self.pk).count()
+                if activos >= self.unidad.cupo_maximo:
+                    raise ValidationError({"unidad": "La unidad no tiene cupos disponibles."})
             composicion = self.unidad.composicion_actual()
             sexo = self.persona.sexo
 

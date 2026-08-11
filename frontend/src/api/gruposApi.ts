@@ -1,5 +1,5 @@
 import { httpClient } from './httpClient'
-import type { ApiSuccess, PaginatedMeta } from './types'
+import type { ApiSuccess, DetailMeta, PaginatedMeta } from './types'
 
 export type GrupoListItem = {
   id: number
@@ -126,7 +126,7 @@ export type GrupoEstructura = {
   ramas: GrupoEstructuraRama[]
 }
 
-export type GrupoDetailResponse = ApiSuccess<GrupoDetail>
+export type GrupoDetailResponse = ApiSuccess<GrupoDetail, DetailMeta>
 export type GrupoEstructuraResponse = ApiSuccess<GrupoEstructura>
 
 export async function getGrupos(params?: GruposQueryParams): Promise<GruposResponse> {

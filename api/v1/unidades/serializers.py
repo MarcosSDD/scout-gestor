@@ -220,3 +220,28 @@ class SubgrupoMiembroWriteSerializer(ModelValidationMixin, serializers.ModelSeri
         self._run_model_validation(instance)
         instance.save()
         return instance
+
+
+class SubgrupoMiembroReasignacionSerializer(serializers.Serializer):
+    subgrupo = serializers.PrimaryKeyRelatedField(queryset=Subgrupo.objects.all())
+
+
+class OpcionGrupoSerializer(serializers.Serializer):
+    id = serializers.IntegerField()
+    nombre = serializers.CharField(source="nombre_oficial")
+
+
+class OpcionPersonaSerializer(serializers.Serializer):
+    id = serializers.IntegerField()
+    nombre = serializers.SerializerMethodField()
+
+    def get_nombre(self, obj):
+        return f"{obj.persona.nombres} {obj.persona.apellidos}"
+
+
+class OpcionDestinoMembresiaSerializer(serializers.ModelSerializer):
+    unidad_nombre = serializers.CharField(source="unidad.nombre", read_only=True)
+
+    class Meta:
+        model = Subgrupo
+        fields = ("id", "nombre", "unidad", "unidad_nombre")
