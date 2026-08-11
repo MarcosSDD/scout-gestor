@@ -44,6 +44,18 @@ function AppPage({ navItemId, children }: AppPageProps) {
   return <AppShell>{children}</AppShell>
 }
 
+/** A guardian can open an authorized beneficiary link without receiving the people navigation. */
+function BeneficiarioDirectPage() {
+  const { user } = useAuth()
+  const personasItem = getNavItemById('personas')
+
+  if (!user || (!user.is_apoderado && (!personasItem || !canSeeNavItem(user, personasItem)))) {
+    return <ForbiddenPage />
+  }
+
+  return <AppShell><BeneficiarioDetailPage /></AppShell>
+}
+
 function App() {
   return (
     <Routes>
@@ -78,6 +90,7 @@ function App() {
       <Route path="/app/unidades/subgrupos/:subgrupoId/editar" element={<RequireAuth><AppPage navItemId="unidades"><StructuralPage page="subgrupo" /></AppPage></RequireAuth>} />
       <Route path="/app/unidades/miembros/:miembroId/reasignar" element={<RequireAuth><AppPage navItemId="unidades"><StructuralPage page="miembro" /></AppPage></RequireAuth>} />
       <Route path="/app/unidades/adultos/:asignacionId/editar" element={<RequireAuth><AppPage navItemId="unidades"><StructuralPage page="adulto" /></AppPage></RequireAuth>} />
+      <Route path="/app/personas/beneficiarios/:beneficiarioId" element={<RequireAuth><BeneficiarioDirectPage /></RequireAuth>} />
       <Route
         path="/app/grupos/:grupoId"
         element={(
@@ -103,7 +116,6 @@ function App() {
         <Route path="adultos/:adultoId" element={<AdultoDetailPage />} />
         <Route path="adultos/:adultoId/certificado" element={<CertificadoFormPage />} />
         <Route path="beneficiarios" element={<BeneficiariosPage />} />
-        <Route path="beneficiarios/:beneficiarioId" element={<BeneficiarioDetailPage />} />
         <Route path="beneficiarios/:beneficiarioId/editar" element={<BeneficiarioFormPage />} />
         <Route path="beneficiarios/:beneficiarioId/asignacion" element={<AsignacionFormPage />} />
         <Route path="beneficiarios/:beneficiarioId/progresiones" element={<ProgresionesPage />} />

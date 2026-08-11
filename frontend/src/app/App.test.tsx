@@ -27,6 +27,10 @@ vi.mock('../features/personas/PersonasLayout', () => ({ PersonasLayout: () => <d
 vi.mock('../features/personas/PersonasPages', () => ({
   PersonasPage: () => <h1>Personas</h1>, AdultosPage: () => <h1>Adultos</h1>, BeneficiariosPage: () => <h1>Beneficiarios</h1>, ApoderadosPage: () => <h1>Apoderados</h1>,
 }))
+vi.mock('../features/personas/PersonaDetailPages', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../features/personas/PersonaDetailPages')>()
+  return { ...actual, BeneficiarioDetailPage: () => <h1>Ficha autorizada mock</h1> }
+})
 vi.mock('../features/unidades/UnidadesPage', () => ({ UnidadesPage: () => <h1>Unidades</h1> }))
 
 const authUser = {
@@ -180,6 +184,20 @@ describe('App', () => {
     )
 
     expect(screen.getByRole('heading', { name: '403' })).toBeInTheDocument()
+  })
+
+  it('allows an apoderado-only user to open a beneficiary link without exposing people navigation', () => {
+    render(
+      withAuth(
+        <MemoryRouter initialEntries={['/app/personas/beneficiarios/42']}>
+          <App />
+        </MemoryRouter>,
+        authValue({ status: 'authenticated', user: { ...authUser, persona_id: 8, is_apoderado: true }, isAuthenticated: true }),
+      ),
+    )
+
+    expect(screen.getByRole('heading', { name: 'Ficha autorizada mock' })).toBeInTheDocument()
+    expect(screen.queryByRole('link', { name: /personas/i })).not.toBeInTheDocument()
   })
 
   it('renders forbidden page', () => {

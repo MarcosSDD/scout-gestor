@@ -2,6 +2,8 @@ import shutil
 import tempfile
 from io import BytesIO
 
+from django.conf import settings
+from django.test import SimpleTestCase
 from django.utils import timezone
 from django.contrib.auth import get_user_model
 from django.core.files.uploadedfile import SimpleUploadedFile
@@ -29,6 +31,22 @@ from personas.models import (
     TipoRegistroProgresion,
 )
 from unidades.models import AdultoUnidadRol, RolAdultoUnidad, Subgrupo, SubgrupoMiembro, Unidad
+
+
+class SecurityConfigurationTests(SimpleTestCase):
+    def test_api_authentication_is_jwt_only(self):
+        authentication_classes = settings.REST_FRAMEWORK["DEFAULT_AUTHENTICATION_CLASSES"]
+
+        self.assertIn("rest_framework_simplejwt.authentication.JWTAuthentication", authentication_classes)
+        self.assertNotIn("rest_framework.authentication.SessionAuthentication", authentication_classes)
+        self.assertFalse(any("oauth2" in backend.lower() for backend in authentication_classes))
+
+    def test_sensitive_endpoint_throttle_rates_are_configured(self):
+        rates = settings.REST_FRAMEWORK["DEFAULT_THROTTLE_RATES"]
+
+        self.assertEqual(rates["auth"], "120/min")
+        self.assertEqual(rates["auth_refresh"], "120/min")
+        self.assertEqual(rates["file_upload"], "20/hour")
 
 
 class ApiTests(APITestCase):

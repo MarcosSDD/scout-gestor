@@ -57,4 +57,11 @@ describe('LoginForm', () => {
     await user.click(screen.getByRole('button', { name: 'Ocultar contrasena' }))
     expect(passwordInput).toHaveAttribute('type', 'password')
   })
+
+  it('does not present unavailable remember-me or password-reset controls', () => {
+    render(<LoginForm onSubmit={vi.fn()} isSubmitting={false} />)
+
+    expect(screen.queryByLabelText(/recordarme/i)).not.toBeInTheDocument()
+    expect(screen.queryByRole('link', { name: /olvidaste/i })).not.toBeInTheDocument()
+  })
 })

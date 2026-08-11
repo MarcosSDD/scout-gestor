@@ -1,4 +1,4 @@
-import { useEffect, useId, useState, type ReactNode } from 'react'
+import { useEffect, useId, useRef, useState, type ReactNode } from 'react'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useForm, useWatch } from 'react-hook-form'
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
@@ -20,10 +20,26 @@ import { useUnidadDetailQuery } from './useUnidadesQuery'
 const asId = (raw?: string) => Number(raw) || 0
 const summary = (errors: Record<string, { message?: string } | undefined>, global: string[]) => [...Object.entries(errors).flatMap(([name, value]) => value?.message ? [{ name, message: value.message }] : []), ...global.map((message) => ({ message }))]
 
-function ConfirmingBackLink({ dirty }: { dirty: boolean }) {
-  const [open, setOpen] = useState(false); const dialogId = useId()
+export function ConfirmingBackLink({ dirty }: { dirty: boolean }) {
+  const [open, setOpen] = useState(false); const dialogId = useId(); const dialogRef = useRef<HTMLDialogElement>(null); const triggerRef = useRef<HTMLButtonElement>(null); const shouldRestoreFocusRef = useRef(false)
+  function closeDialog() {
+    shouldRestoreFocusRef.current = true
+    dialogRef.current?.close()
+    setOpen(false)
+  }
+  useEffect(() => {
+    const dialog = dialogRef.current
+    if (!dialog || !open) return
+    if (!dialog.open) dialog.showModal()
+  }, [open])
+  useEffect(() => {
+    if (!open && shouldRestoreFocusRef.current) {
+      triggerRef.current?.focus()
+      shouldRestoreFocusRef.current = false
+    }
+  }, [open])
   if (!dirty) return <Link className="grupos-back-link" to="/app/unidades">← Volver</Link>
-  return <><button className="grupos-back-link" type="button" onClick={() => setOpen(true)}>← Volver</button>{open ? <div className="confirm-dialog" role="alertdialog" aria-modal="true" aria-labelledby={`${dialogId}-title`}><div className="confirm-dialog__panel"><h2 id={`${dialogId}-title`} tabIndex={-1}>Cambios sin guardar</h2><p>Si sales ahora, se perderán los cambios no guardados.</p><div><Link className="primary-button" to="/app/unidades" onClick={allowDirtyNavigation}>Salir sin guardar</Link><button type="button" onClick={() => setOpen(false)}>Seguir editando</button></div></div></div> : null}</>
+  return <><button ref={triggerRef} className="grupos-back-link" type="button" onClick={() => setOpen(true)}>← Volver</button>{open ? <dialog ref={dialogRef} className="confirm-dialog" aria-labelledby={`${dialogId}-title`} onCancel={(event) => { event.preventDefault(); closeDialog() }} onClick={(event) => { if (event.target === event.currentTarget) closeDialog() }}><div className="confirm-dialog__panel"><h2 id={`${dialogId}-title`}>Cambios sin guardar</h2><p>Si sales ahora, se perderán los cambios no guardados.</p><div><Link className="primary-button" to="/app/unidades" onClick={allowDirtyNavigation}>Salir sin guardar</Link><button type="button" onClick={closeDialog}>Seguir editando</button></div></div></dialog> : null}</>
 }
 function Page({ title, dirty, children }: { title: string; dirty?: boolean; children: ReactNode }) { return <section className="home-feed form-page" aria-labelledby="structural-title"><ConfirmingBackLink dirty={Boolean(dirty)} /><article className="home-card"><h1 id="structural-title">{title}</h1>{children}</article></section> }
 function State({ message }: { message: string }) { return <Page title="Gestión estructural"><p role="alert">{message}</p></Page> }

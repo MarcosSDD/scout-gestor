@@ -2,15 +2,10 @@ import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 
 import { downloadPrivatePhoto, revokePrivateFile } from '../../api/privateFileApi'
+import { getApiErrorKind } from '../../api/errors'
 import type { ApiError, DetailPermissions } from '../../api/types'
 
 export type DetailItem = { label: string; value?: string | number | boolean | null }
-
-function errorKind(error: ApiError | null) {
-  if (error?.error.status === 403 || error?.error.code === 'permission_denied') return 'denied'
-  if (error?.error.status === 404 || error?.error.code === 'not_found') return 'missing'
-  return 'other'
-}
 
 function PrivatePhoto({ personaId, available, permissions, version }: { personaId: number; available?: boolean; permissions?: DetailPermissions; version?: string }) {
   const [url, setUrl] = useState<string | null>(null)
@@ -40,9 +35,9 @@ type DetailViewProps = {
 export function DetailView({ title, eyebrow, backTo, backLabel, items, isLoading, error, onRetry, personaId, photoAvailable, photoVersion, permissions }: DetailViewProps) {
   if (isLoading) return <article className="home-card detail-state" role="status">Cargando ficha…</article>
   if (error) {
-    const kind = errorKind(error)
-    const heading = kind === 'denied' ? 'Acceso denegado' : kind === 'missing' ? 'Ficha no encontrada' : 'No fue posible cargar la ficha'
-    return <article className="home-card detail-state" role="alert"><h1>{heading}</h1><p>{kind === 'denied' ? 'El backend no permite ver esta información.' : kind === 'missing' ? 'La ficha no existe o ya no está disponible.' : error.error.message}</p>{kind === 'other' ? <button className="primary-button dashboard-retry-button" type="button" onClick={onRetry}>Reintentar</button> : null}</article>
+    const kind = getApiErrorKind(error)
+    const heading = kind === 'unauthorized' ? 'Sesión no autorizada' : kind === 'forbidden' ? 'Acceso denegado' : kind === 'not-found' ? 'Ficha no encontrada' : 'No fue posible cargar la ficha'
+    return <article className="home-card detail-state" role="alert"><h1>{heading}</h1><p>{kind === 'unauthorized' ? 'Tu sesión ya no permite acceder a esta información. Inicia sesión nuevamente.' : kind === 'forbidden' ? 'El backend no permite ver esta información.' : kind === 'not-found' ? 'La ficha no existe o ya no está disponible.' : error.error.message}</p>{kind === 'other' ? <button className="primary-button dashboard-retry-button" type="button" onClick={onRetry}>Reintentar</button> : null}</article>
   }
   return <section className="home-feed detail-page" aria-labelledby="detail-title">
     <Link className="grupos-back-link" to={backTo}>Volver a {backLabel}</Link>

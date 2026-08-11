@@ -19,7 +19,8 @@ Backend:
 
 - `django`
 - `djangorestframework`
-- `django-oauth-toolkit`
+- `django-cors-headers`
+- `gunicorn` (imagen de producción)
 - `djangorestframework-simplejwt`
 - `psycopg[binary]`
 - `Pillow`
@@ -49,10 +50,12 @@ set -a && source .env && set +a
 
 Variables principales:
 
-- `DJANGO_SECRET_KEY`
-- `DJANGO_DEBUG`
-- `DJANGO_ALLOWED_HOSTS`
-- `POSTGRES_DB`, `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_HOST`, `POSTGRES_PORT`
+- `DJANGO_SECRET_KEY`, obligatorio cuando `DJANGO_DEBUG=false`; usar un valor aleatorio provisto por el gestor de secretos de la plataforma.
+- `DJANGO_DEBUG`, `DJANGO_ALLOWED_HOSTS`. Producción requiere `false` y hosts explícitos, sin comodines.
+- `DJANGO_CORS_ALLOWED_ORIGINS` y `DJANGO_CSRF_TRUSTED_ORIGINS`, listas CSV de orígenes completos y explícitos; déjalas vacías cuando frontend y API comparten origen.
+- `DJANGO_SECURE_PROXY_SSL_HEADER=true` únicamente si un proxy confiable sobrescribe `X-Forwarded-Proto`.
+- `DJANGO_SECURE_HSTS_SECONDS`, 31536000 por defecto en producción. `DJANGO_SECURE_HSTS_INCLUDE_SUBDOMAINS` es `false` por defecto y solo debe activarse tras verificar todos los subdominios.
+- `POSTGRES_DB`, `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_HOST`, `POSTGRES_PORT`.
 
 Si `POSTGRES_DB` no existe, Django usa SQLite local (`db.sqlite3`). Si existe, usa PostgreSQL.
 
@@ -94,6 +97,26 @@ docker compose run --rm web python manage.py test
 docker compose run --rm web python manage.py createsuperuser
 docker compose down -v
 ```
+
+## Despliegue backend
+
+La imagen por defecto ejecuta Gunicorn como usuario sin privilegios; no contiene secretos porque `.env` está excluido del contexto de build. `docker-compose.yml` es **solo desarrollo**: publica PostgreSQL, usa credenciales conocidas y eleva `web` a root para que los bind mounts locales sigan funcionando. No debe utilizarse en producción.
+
+Antes de desplegar, inyecta las variables desde el gestor de secretos de la plataforma y ejecuta:
+
+```bash
+export DJANGO_DEBUG=false
+export DJANGO_SECRET_KEY="$(python -c 'import secrets; print(secrets.token_urlsafe(50))')"
+export DJANGO_ALLOWED_HOSTS=api.example.cl
+# Solo si hay un origen de frontend distinto:
+export DJANGO_CORS_ALLOWED_ORIGINS=https://app.example.cl
+export DJANGO_CSRF_TRUSTED_ORIGINS=https://app.example.cl
+./scripts/check_deploy.sh
+```
+
+El proceso debe quedar detrás de TLS. Si termina TLS un proxy, confirmar que la aplicación solo es alcanzable desde ese proxy y recién entonces activar `DJANGO_SECURE_PROXY_SSL_HEADER=true`; de lo contrario puede confiarse un header de cliente. Servir estáticos y media privada mediante la infraestructura de despliegue: Django no publica `MEDIA_ROOT` en producción. No publicar PostgreSQL al host; mantenerlo en red privada y usar un secreto de base de datos diferente al de desarrollo.
+
+La API usa JWT (access de 30 minutos, refresh de 1 día, rotación y blacklist). OAuth2 se retiró de DRF y de dependencias porque no existen rutas OAuth2 montadas. Se limitan login, refresh y escrituras que aceptan archivos; no registrar cuerpos de petición ni encabezados `Authorization`/tokens.
 
 ## Levantar frontend local
 
@@ -150,7 +173,7 @@ No hay CI ni pre-commit configurados. Backend no tiene lint/formatter de repo; f
 ## Convenciones API importantes
 
 - API base: `/api/v1/`.
-- OAuth2 esta configurado como clase de auth, pero no hay rutas `/o/` montadas.
+- Autenticación DRF: JWT exclusivamente; el admin Django conserva su propia sesión fuera de DRF. OAuth2 no está instalado ni tiene rutas.
 - Permiso DRF global: `IsAuthenticated`; endpoints publicos deben declarar `AllowAny`.
 - Respuestas exitosas usan `{success, message, data, meta?}` desde `api/v1/responses.py`.
 - Errores usan `{success: false, error: {code, message, details}}` desde `api/v1/exceptions.py`.

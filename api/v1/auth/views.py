@@ -1,4 +1,5 @@
 from rest_framework.permissions import AllowAny, IsAuthenticated
+from rest_framework.throttling import ScopedRateThrottle
 from rest_framework.views import APIView
 from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
 
@@ -15,6 +16,8 @@ from api.v1.responses import success_response
 class ScoutTokenObtainPairView(TokenObtainPairView):
     serializer_class = ScoutTokenObtainPairSerializer
     permission_classes = [AllowAny]
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = "auth"
 
     def post(self, request, *args, **kwargs):
         serializer = self.get_serializer(data=request.data)
@@ -25,6 +28,8 @@ class ScoutTokenObtainPairView(TokenObtainPairView):
 class ScoutTokenRefreshView(TokenRefreshView):
     serializer_class = ScoutTokenRefreshSerializer
     permission_classes = [AllowAny]
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = "auth_refresh"
 
     def post(self, request, *args, **kwargs):
         serializer = self.get_serializer(data=request.data)

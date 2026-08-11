@@ -1,4 +1,4 @@
-import { toApiError } from './errors'
+import { getApiErrorKind, toApiError } from './errors'
 
 describe('toApiError', () => {
   it('returns backend envelope when response already matches ApiError', () => {
@@ -47,5 +47,22 @@ describe('toApiError', () => {
     expect(normalized.success).toBe(false)
     expect(normalized.error.code).toBe('network_or_unknown_error')
     expect(normalized.error.message).toBe('No fue posible completar la solicitud')
+  })
+
+  it.each([
+    [401, 'not_authenticated', 'unauthorized'],
+    [403, 'permission_denied', 'forbidden'],
+    [404, 'not_found', 'not-found'],
+    [null, 'network_or_unknown_error', 'other'],
+  ] as const)('classifies %s responses as %s', (status, code, kind) => {
+    expect(getApiErrorKind({ success: false, error: { status, code, message: '', details: null } })).toBe(kind)
+  })
+
+  it.each([
+    [401, 'unauthorized'],
+    [403, 'forbidden'],
+    [404, 'not-found'],
+  ] as const)('classifies a status nested in details (%s) as %s', (status, kind) => {
+    expect(getApiErrorKind({ success: false, error: { status: null, code: 'unknown', message: '', details: { status } } })).toBe(kind)
   })
 })

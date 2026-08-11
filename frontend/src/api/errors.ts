@@ -62,3 +62,14 @@ export function toApiError(error: unknown): ApiError {
     },
   }
 }
+
+export type ApiErrorKind = 'unauthorized' | 'forbidden' | 'not-found' | 'other'
+
+/** Maps both DRF envelopes and transport failures to one UI-level error state. */
+export function getApiErrorKind(error: ApiError | null | undefined): ApiErrorKind {
+  const status = error?.error.status ?? (typeof error?.error.details === 'object' && error.error.details && 'status' in error.error.details && typeof error.error.details.status === 'number' ? error.error.details.status : null)
+  if (status === 401 || error?.error.code === 'not_authenticated' || error?.error.code === 'authentication_failed') return 'unauthorized'
+  if (status === 403 || error?.error.code === 'permission_denied') return 'forbidden'
+  if (status === 404 || error?.error.code === 'not_found') return 'not-found'
+  return 'other'
+}

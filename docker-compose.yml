@@ -1,6 +1,9 @@
 services:
+  # Development-only stack. It deliberately publishes PostgreSQL and runs as
+  # root to preserve bind-mount and named-volume ergonomics on local hosts.
   web:
     build: .
+    user: "0:0"
     command: >
       sh -c "python manage.py migrate
       && python manage.py seed_catalogos
@@ -22,6 +25,12 @@ services:
     depends_on:
       db:
         condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8007/api/v1/health/', timeout=3)"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 30s
 
   db:
     image: postgres:16-alpine

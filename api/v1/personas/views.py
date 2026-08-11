@@ -7,6 +7,7 @@ from rest_framework import status
 from rest_framework.exceptions import PermissionDenied, ValidationError
 from rest_framework.generics import GenericAPIView
 from rest_framework.parsers import FormParser, JSONParser, MultiPartParser
+from rest_framework.throttling import ScopedRateThrottle
 from rest_framework.views import APIView
 
 from api.v1.personas.serializers import (
@@ -65,6 +66,15 @@ from personas.models import (
     Persona,
     RegistroProgresionScout,
 )
+
+
+class _FileWriteThrottleMixin:
+    throttle_scope = "file_upload"
+
+    def get_throttles(self):
+        if self.request.method in {"POST", "PATCH", "PUT"}:
+            return [ScopedRateThrottle()]
+        return super().get_throttles()
 
 
 class _ListResponseMixin:
@@ -146,7 +156,7 @@ def _private_file_response(field_file, *, attachment=False):
     return response
 
 
-class PersonaListCreateView(_ListResponseMixin, GenericAPIView):
+class PersonaListCreateView(_FileWriteThrottleMixin, _ListResponseMixin, GenericAPIView):
     parser_classes = [JSONParser, MultiPartParser, FormParser]
 
     def get_queryset(self):
@@ -178,7 +188,7 @@ class PersonaListCreateView(_ListResponseMixin, GenericAPIView):
         return success_response(data=payload, message="Persona creada", status_code=status.HTTP_201_CREATED)
 
 
-class PersonaRetrieveUpdateView(GenericAPIView):
+class PersonaRetrieveUpdateView(_FileWriteThrottleMixin, GenericAPIView):
     parser_classes = [JSONParser, MultiPartParser, FormParser]
     queryset = Persona.objects.order_by("apellidos", "nombres")
 
@@ -214,7 +224,7 @@ class ValidarRutView(APIView):
         return success_response(data=payload, message="RUT valido")
 
 
-class AdultoListCreateView(_ListResponseMixin, GenericAPIView):
+class AdultoListCreateView(_FileWriteThrottleMixin, _ListResponseMixin, GenericAPIView):
     parser_classes = [JSONParser, MultiPartParser, FormParser]
     queryset = Adulto.objects.select_related("persona").order_by("persona__apellidos", "persona__nombres")
 
@@ -255,7 +265,7 @@ class AdultoListCreateView(_ListResponseMixin, GenericAPIView):
         return success_response(data=payload, message="Adulto creado", status_code=status.HTTP_201_CREATED)
 
 
-class AdultoRetrieveUpdateView(GenericAPIView):
+class AdultoRetrieveUpdateView(_FileWriteThrottleMixin, GenericAPIView):
     queryset = Adulto.objects.select_related("persona")
 
     def get_queryset(self):
@@ -581,7 +591,7 @@ class PersonaFotoDownloadView(APIView):
         return _private_file_response(persona.foto)
 
 
-class AdultoCertificadoDownloadView(APIView):
+class AdultoCertificadoDownloadView(_FileWriteThrottleMixin, APIView):
     parser_classes = [MultiPartParser, FormParser]
 
     def get(self, request, pk):

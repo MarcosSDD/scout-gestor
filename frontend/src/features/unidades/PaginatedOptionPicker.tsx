@@ -1,7 +1,7 @@
 import { useId, useState } from 'react'
-import type { Opcion, Subgrupo } from '../../api/unidadesApi'
+import type { Opcion, OpcionDestinoMembresia } from '../../api/unidadesApi'
 
-type Props = { label: string; value: number | null; onChange: (id: number) => void; query: { data?: { data: Array<Opcion | Subgrupo>; meta?: { next: string | null; previous: string | null; count: number } }; isLoading: boolean; isError: boolean }; onSearch?: (search: string) => void; onPageChange?: (page: number) => void; error?: string; disabled?: boolean }
+type Props = { label: string; value: number | null; onChange: (id: number) => void; query: { data?: { data: Array<Opcion | OpcionDestinoMembresia>; meta?: { next: string | null; previous: string | null; count: number } }; isLoading: boolean; isError: boolean }; onSearch?: (search: string) => void; onPageChange?: (page: number) => void; error?: string; disabled?: boolean }
 export function PaginatedOptionPicker({ label, value, onChange, query, onSearch, onPageChange, error, disabled }: Props) {
   const id = useId(); const [search, setSearch] = useState(''); const options = query.data?.data ?? []; const meta = query.data?.meta
   return <fieldset className="option-picker" aria-describedby={`${id}-status ${error ? `${id}-error` : ''}`}><legend>{label}</legend>

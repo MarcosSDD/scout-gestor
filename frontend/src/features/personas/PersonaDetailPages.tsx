@@ -1,10 +1,11 @@
-import { useState } from 'react'
+import { useContext, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { downloadPrivateCertificate } from '../../api/personasApi'
 
 import type { DetailItem } from '../details/DetailView'
 import { DetailView } from '../details/DetailView'
 import { useAuth } from '../auth/useAuth'
+import { AuthContext } from '../auth/AuthContext'
 import { useAdultoDetailQuery, useApoderadoDetailQuery, useBeneficiarioDetailQuery, usePersonaDetailQuery } from './usePersonasQueries'
 
 function idFromParam(value?: string) { const id = Number(value); return Number.isInteger(id) && id > 0 ? id : 0 }
@@ -40,9 +41,10 @@ export function AdultoDetailPage() {
 }
 
 export function BeneficiarioDetailPage() {
-  const { beneficiarioId } = useParams(); const query = useBeneficiarioDetailQuery(idFromParam(beneficiarioId)); const data = query.data?.data; const person = data?.persona
+  const user = useContext(AuthContext)?.user; const { beneficiarioId } = useParams(); const query = useBeneficiarioDetailQuery(idFromParam(beneficiarioId)); const data = query.data?.data; const person = data?.persona
   const permissions = query.data?.meta?.permissions
-  return <>{data && (permissions?.can_edit || permissions?.can_reassign_unit || permissions?.can_manage_progression) ? <DetailActions links={[...(permissions.can_edit ? [{ to: 'editar', label: 'Editar beneficiario' }] : []), ...(permissions.can_reassign_unit ? [{ to: 'asignacion', label: 'Asignar unidad' }] : []), ...(permissions.can_manage_progression ? [{ to: 'progresiones', label: 'Ver progresión' }] : [])]} /> : null}<DetailView title={person ? personName(person) || 'Beneficiario' : 'Beneficiario'} eyebrow="Ficha de beneficiario" backTo="/app/personas/beneficiarios" backLabel="beneficiarios" items={data ? [...personItems(data.persona), { label: 'Rama', value: data.rama_nombre }, { label: 'Unidad', value: data.unidad_nombre }, { label: 'Grupo', value: data.grupo_nombre }, { label: 'Ingreso', value: data.fecha_ingreso }] : []} isLoading={query.isLoading} error={query.error as never} onRetry={() => void query.refetch()} personaId={person?.id} photoAvailable={person?.foto_disponible} photoVersion={person?.updated_at} permissions={permissions} /></>
+  const isGuardianOnly = Boolean(user?.is_apoderado && !user.is_staff && !user.is_superuser && !user.responsable_grupo_ids.length && !user.unidad_roles.length)
+  return <>{data && (permissions?.can_edit || permissions?.can_reassign_unit || permissions?.can_manage_progression) ? <DetailActions links={[...(permissions.can_edit ? [{ to: 'editar', label: 'Editar beneficiario' }] : []), ...(permissions.can_reassign_unit ? [{ to: 'asignacion', label: 'Asignar unidad' }] : []), ...(permissions.can_manage_progression ? [{ to: 'progresiones', label: 'Ver progresión' }] : [])]} /> : null}<DetailView title={person ? personName(person) || 'Beneficiario' : 'Beneficiario'} eyebrow="Ficha de beneficiario" backTo={isGuardianOnly ? '/app' : '/app/personas/beneficiarios'} backLabel={isGuardianOnly ? 'inicio' : 'beneficiarios'} items={data ? [...personItems(data.persona), { label: 'Rama', value: data.rama_nombre }, { label: 'Unidad', value: data.unidad_nombre }, { label: 'Grupo', value: data.grupo_nombre }, { label: 'Ingreso', value: data.fecha_ingreso }] : []} isLoading={query.isLoading} error={query.error as never} onRetry={() => void query.refetch()} personaId={person?.id} photoAvailable={person?.foto_disponible} photoVersion={person?.updated_at} permissions={permissions} /></>
 }
 
 function DetailActions({ links, certificateId }: { links: { to: string; label: string }[]; certificateId?: number }) {
