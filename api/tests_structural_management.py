@@ -13,6 +13,7 @@ from unittest.mock import patch
 from catalogos.models import ComposicionPermitida, Distrito, Rama, Zona
 from organizacion.models import ConsejoGrupo, GrupoScout, TipoGrupo
 from personas.models import Adulto, Beneficiario, Persona, RolAdulto, SexoPersona
+import unidades.services as unidades_services
 from unidades.models import AdultoUnidadRol, RolAdultoUnidad, Subgrupo, SubgrupoMiembro, Unidad
 from unidades.selectors import duplicate_adult_unit_role_pairs
 from unidades.services import (
@@ -89,6 +90,84 @@ class StructuralServiceTests(StructuralFixtureMixin, TestCase):
                 update_adulto_unidad_rol(user=self.user, asignacion=asignacion, data={"rol": RolAdultoUnidad.RESPONSABLE})
         self.assertIn("rol", update_error.exception.message_dict)
 
+    def test_adult_assignment_synchronizes_role_and_audits_change(self):
+        adulta = self.make_adulto("19191919-1", SexoPersona.FEMENINO)
+        adulto = self.make_adulto("20202020-2", SexoPersona.MASCULINO)
+
+        create_adulto_unidad_rol(
+            user=self.user,
+            data={"unidad": self.unidad, "adulto": adulta, "rol": RolAdultoUnidad.ASISTENTE},
+        )
+        create_adulto_unidad_rol(
+            user=self.user,
+            data={"unidad": self.destino, "adulto": adulto, "rol": RolAdultoUnidad.ASISTENTE},
+        )
+
+        adulta.refresh_from_db()
+        adulto.refresh_from_db()
+        self.assertEqual(adulta.rol_principal, RolAdulto.GUIA)
+        self.assertEqual(adulto.rol_principal, RolAdulto.DIRIGENTE)
+        self.assertEqual(adulta.history.first().history_user, self.user)
+        self.assertEqual(adulto.history.first().history_user, self.user)
+
+    def test_adult_assignment_preserves_special_and_other_roles(self):
+        apoderado = self.make_adulto("21212121-3", SexoPersona.FEMENINO)
+        responsable_grupo = self.make_adulto("22222222-4", SexoPersona.MASCULINO)
+        colaborador = self.make_adulto("23232323-5", SexoPersona.FEMENINO)
+        otro = self.make_adulto("24242424-6", SexoPersona.OTRO)
+        apoderado.rol_principal = RolAdulto.APODERADO
+        responsable_grupo.rol_principal = RolAdulto.RESP_GRUPO
+        colaborador.rol_principal = RolAdulto.COLABORADOR
+        apoderado.save()
+        responsable_grupo.save()
+        colaborador.save()
+
+        create_adulto_unidad_rol(
+            user=self.user,
+            data={"unidad": self.unidad, "adulto": apoderado, "rol": RolAdultoUnidad.ASISTENTE},
+        )
+        create_adulto_unidad_rol(
+            user=self.user,
+            data={"unidad": self.unidad, "adulto": responsable_grupo, "rol": RolAdultoUnidad.COLABORADOR},
+        )
+        create_adulto_unidad_rol(
+            user=self.user,
+            data={"unidad": self.destino, "adulto": colaborador, "rol": RolAdultoUnidad.ASISTENTE},
+        )
+        create_adulto_unidad_rol(
+            user=self.user,
+            data={"unidad": self.destino, "adulto": otro, "rol": RolAdultoUnidad.ASISTENTE},
+        )
+
+        apoderado.refresh_from_db()
+        responsable_grupo.refresh_from_db()
+        colaborador.refresh_from_db()
+        otro.refresh_from_db()
+        self.assertEqual(apoderado.rol_principal, RolAdulto.APODERADO)
+        self.assertEqual(responsable_grupo.rol_principal, RolAdulto.RESP_GRUPO)
+        self.assertEqual(colaborador.rol_principal, RolAdulto.COLABORADOR)
+        self.assertEqual(otro.rol_principal, RolAdulto.GUIA)
+
+    def test_adult_assignment_rolls_back_when_role_update_fails(self):
+        adulta = self.make_adulto("23232323-5", SexoPersona.FEMENINO)
+        original_save = unidades_services._save
+
+        def fail_adult_save(instance, user):
+            if isinstance(instance, Adulto):
+                raise ValidationError({"rol_principal": "No se pudo actualizar el rol."})
+            return original_save(instance, user)
+
+        with patch("unidades.services._save", side_effect=fail_adult_save):
+            with self.assertRaises(ValidationError):
+                create_adulto_unidad_rol(
+                    user=self.user,
+                    data={"unidad": self.unidad, "adulto": adulta, "rol": RolAdultoUnidad.ASISTENTE},
+                )
+
+        adulta.refresh_from_db()
+        self.assertEqual(adulta.rol_principal, RolAdulto.GUIA)
+        self.assertFalse(AdultoUnidadRol.objects.filter(adulto=adulta).exists())
+
     def test_duplicate_role_report_is_empty_for_valid_data(self):
         self.assertEqual(list(duplicate_adult_unit_role_pairs()), [])
         call_command("verificar_roles_adulto_unidad")
@@ -153,6 +232,28 @@ class StructuralApiTests(StructuralFixtureMixin, APITestCase):
         response = self.client.patch(url, {"subgrupo": self.subgrupo.id, "beneficiario": self.miembro.beneficiario_id}, format="json")
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertFalse(response.data["success"])
+
+    def test_adult_assignment_api_synchronizes_role(self):
+        adulta = self.make_adulto("24242424-6", SexoPersona.FEMENINO)
+        adulto = self.make_adulto("25252525-7", SexoPersona.MASCULINO)
+
+        female_response = self.client.post(
+            reverse("v1:unidades-adultos-roles-list"),
+            {"unidad": self.unidad.id, "adulto": adulta.id, "rol": RolAdultoUnidad.ASISTENTE},
+            format="json",
+        )
+        male_response = self.client.post(
+            reverse("v1:unidades-adultos-roles-list"),
+            {"unidad": self.unidad.id, "adulto": adulto.id, "rol": RolAdultoUnidad.COLABORADOR},
+            format="json",
+        )
+
+        adulta.refresh_from_db()
+        adulto.refresh_from_db()
+        self.assertEqual(female_response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(male_response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(adulta.rol_principal, RolAdulto.GUIA)
+        self.assertEqual(adulto.rol_principal, RolAdulto.DIRIGENTE)
 
 
 class StructuralAuthorizationTests(StructuralFixtureMixin, APITestCase):

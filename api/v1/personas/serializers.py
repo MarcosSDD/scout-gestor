@@ -130,6 +130,7 @@ class PersonaWriteSerializer(ModelValidationMixin, serializers.ModelSerializer):
 class AdultoListSerializer(serializers.ModelSerializer):
     persona_nombre = serializers.SerializerMethodField()
     persona_estado = serializers.CharField(source="persona.estado", read_only=True)
+    rol_principal_display = serializers.CharField(source="get_rol_principal_display", read_only=True)
     certificado_vigente = serializers.BooleanField(read_only=True)
 
     class Meta:
@@ -140,6 +141,7 @@ class AdultoListSerializer(serializers.ModelSerializer):
             "persona_nombre",
             "persona_estado",
             "rol_principal",
+            "rol_principal_display",
             "certificado_vigencia_hasta",
             "certificado_vigente",
         )

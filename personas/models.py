@@ -30,7 +30,7 @@ class SexoPersona(models.TextChoices):
 
 
 class RolAdulto(models.TextChoices):
-    GUIA = "GUIA", "Guia"
+    GUIA = "GUIADORA", "Guiadora"
     DIRIGENTE = "DIRIGENTE", "Dirigente"
     APODERADO = "APODERADO", "Apoderado"
     RESP_GRUPO = "RESP_GRUPO", "Responsable de grupo"

@@ -8,7 +8,7 @@ import { getRamas } from '../../api/catalogosApi'
 import { renderWithQueryClient } from '../../test/renderWithQueryClient'
 import { AuthContext } from '../auth/AuthContext'
 import { AdultoDetailPage, ApoderadoDetailPage, BeneficiarioDetailPage, OwnPersonaPage } from './PersonaDetailPages'
-import { BeneficiariosPage, PersonasPage } from './PersonasPages'
+import { AdultosPage, BeneficiariosPage, PersonasPage } from './PersonasPages'
 
 vi.mock('../../api/personasApi', () => ({ getPersonas: vi.fn(), getAdultos: vi.fn(), getBeneficiarios: vi.fn(), getApoderados: vi.fn(), getAdulto: vi.fn(), getBeneficiario: vi.fn(), getApoderado: vi.fn(), getPersona: vi.fn() }))
 vi.mock('../../api/catalogosApi', () => ({ getRamas: vi.fn() }))
@@ -34,6 +34,21 @@ describe('PersonasPage', () => {
     fireEvent.change(screen.getByLabelText('Buscar'), { target: { value: 'Ana' } })
     fireEvent.click(screen.getByRole('button', { name: 'Aplicar filtros' }))
     expect(getPersonas).toHaveBeenLastCalledWith({ search: 'Ana' })
+  })
+
+  it('uses the role display label and sends GUIADORA when filtering guiadoras', async () => {
+    const { getAdultos } = await import('../../api/personasApi')
+    vi.mocked(getAdultos).mockResolvedValue({ success: true, message: 'OK', meta: { count: 2, next: null, previous: null }, data: [
+      { id: 1, persona: 1, persona_nombre: 'María Scout', persona_estado: 'ACTIVO', rol_principal: 'GUIADORA', rol_principal_display: 'Guiadora de unidad', certificado_vigencia_hasta: '2030-01-01', certificado_vigente: true },
+      { id: 2, persona: 2, persona_nombre: 'Elena Legacy', persona_estado: 'ACTIVO', rol_principal: 'GUIA', certificado_vigencia_hasta: '2030-01-01', certificado_vigente: true },
+    ] })
+    renderWithQueryClient(<MemoryRouter><AdultosPage /></MemoryRouter>)
+
+    expect(await screen.findByText('Guiadora de unidad')).toBeInTheDocument()
+    expect(screen.getAllByText('Guiadora')).toHaveLength(2)
+    fireEvent.change(screen.getByLabelText('Rol'), { target: { value: 'GUIADORA' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Aplicar filtros' }))
+    expect(getAdultos).toHaveBeenLastCalledWith({ rol_principal: 'GUIADORA' })
   })
 
   it('filters beneficiaries by branch and unit names, preserving initial URL filters until applied', async () => {

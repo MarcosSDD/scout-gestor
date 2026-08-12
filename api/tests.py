@@ -673,6 +673,28 @@ class PersonasUnidadesApiTests(APITestCase):
         self.assertFalse(response.data["success"])
         self.assertIn("certificado_vigencia_hasta", str(response.data["error"]["details"]))
 
+    def test_adultos_lista_expone_display_y_filtra_por_guiadora(self):
+        self._authenticate()
+        guiadora = Adulto.objects.create(
+            persona=Persona.objects.create(**self._persona_payload(rut="44.444.444-4", email="guiadora@example.test", sexo=SexoPersona.FEMENINO)),
+            rol_principal=RolAdulto.GUIA,
+            certificado_inhabilidades="certificados/test.pdf",
+            certificado_vigencia_hasta=timezone.localdate() + timezone.timedelta(days=30),
+        )
+        Adulto.objects.create(
+            persona=Persona.objects.create(**self._persona_payload(rut="55.555.555-5", email="dirigente@example.test")),
+            rol_principal=RolAdulto.DIRIGENTE,
+            certificado_inhabilidades="certificados/test.pdf",
+            certificado_vigencia_hasta=timezone.localdate() + timezone.timedelta(days=30),
+        )
+
+        response = self.client.get(reverse("v1:adultos-list"), {"rol_principal": RolAdulto.GUIA})
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual([item["id"] for item in response.data["data"]], [guiadora.id])
+        self.assertEqual(response.data["data"][0]["rol_principal"], "GUIADORA")
+        self.assertEqual(response.data["data"][0]["rol_principal_display"], "Guiadora")
+
     def test_apoderado_beneficiario_valida_fecha_autorizacion(self):
         self._authenticate()
 

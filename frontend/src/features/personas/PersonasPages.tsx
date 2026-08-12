@@ -11,6 +11,11 @@ import { useUnidadOptionsQuery } from '../unidades/useStructuralQueries'
 
 const stateFilter: ListFilter = { name: 'estado', label: 'Estado', type: 'select', options: [{ value: 'ACTIVO', label: 'Activo' }, { value: 'INACTIVO', label: 'Inactivo' }] }
 const searchFilter: ListFilter = { name: 'search', label: 'Buscar', type: 'search' }
+const adultRoleLabels: Record<string, string> = { GUIA: 'Guiadora', GUIADORA: 'Guiadora', DIRIGENTE: 'Dirigente', RESP_GRUPO: 'Responsable de grupo', APODERADO: 'Apoderado', COLABORADOR: 'Colaborador' }
+
+function adultRoleLabel({ rol_principal: role, rol_principal_display: display }: AdultoListItem) {
+  return display ?? adultRoleLabels[role] ?? role
+}
 
 export function PersonasPage() {
   const list = useListSearchParams(['search', 'estado'])
@@ -21,8 +26,8 @@ export function PersonasPage() {
 export function AdultosPage() {
   const list = useListSearchParams(['search', 'estado', 'rol_principal', 'certificado_vigente'])
   const query = useAdultosQuery(list.params as AdultosQueryParams)
-  const filters: ListFilter[] = [searchFilter, stateFilter, { name: 'rol_principal', label: 'Rol', type: 'select', options: [{ value: 'GUIA', label: 'Guia' }, { value: 'DIRIGENTE', label: 'Dirigente' }, { value: 'RESP_GRUPO', label: 'Responsable de grupo' }, { value: 'APODERADO', label: 'Apoderado' }, { value: 'COLABORADOR', label: 'Colaborador' }] }, { name: 'certificado_vigente', label: 'Certificado', type: 'select', options: [{ value: 'true', label: 'Vigente' }, { value: 'false', label: 'Vencido' }] }]
-  const columns: ListColumn<AdultoListItem>[] = [{ label: 'Nombre', render: (item) => item.persona_nombre }, { label: 'Rol', render: (item) => item.rol_principal }, { label: 'Certificado', render: (item) => item.certificado_vigente ? `Vigente hasta ${item.certificado_vigencia_hasta}` : 'Vencido' }]
+  const filters: ListFilter[] = [searchFilter, stateFilter, { name: 'rol_principal', label: 'Rol', type: 'select', options: [{ value: 'GUIADORA', label: 'Guiadora' }, { value: 'DIRIGENTE', label: 'Dirigente' }, { value: 'RESP_GRUPO', label: 'Responsable de grupo' }, { value: 'APODERADO', label: 'Apoderado' }, { value: 'COLABORADOR', label: 'Colaborador' }] }, { name: 'certificado_vigente', label: 'Certificado', type: 'select', options: [{ value: 'true', label: 'Vigente' }, { value: 'false', label: 'Vencido' }] }]
+  const columns: ListColumn<AdultoListItem>[] = [{ label: 'Nombre', render: (item) => item.persona_nombre }, { label: 'Rol', render: adultRoleLabel }, { label: 'Certificado', render: (item) => item.certificado_vigente ? `Vigente hasta ${item.certificado_vigencia_hasta}` : 'Vencido' }]
   return <DataListPage eyebrow="Gestion de personas" title="Guías y Dirigentes" description="Equipo adulto visible sin exponer documentos sensibles." items={query.data?.data ?? []} meta={query.data?.meta} filters={filters} params={list.params} columns={columns} detailPath={(item) => `/app/personas/adultos/${item.id}`} isLoading={query.isLoading} isError={query.isError} error={query.error as never} onRetry={() => void query.refetch()} onApplyFilters={list.applyFilters} onPageChange={list.goToPage} />
 }
 

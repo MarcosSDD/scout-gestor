@@ -6,8 +6,10 @@ type ListQueryParams = { page?: number; search?: string; estado?: string }
 
 export type PersonaListItem = { id: number; nombre_completo: string; estado: string }
 export type AdultoListItem = {
-  id: number; persona: number; persona_nombre: string; persona_estado: string; rol_principal: string
-  certificado_vigencia_hasta: string; certificado_vigente: boolean
+	  id: number; persona: number; persona_nombre: string; persona_estado: string; rol_principal: string
+	  /** Optional while API deployments transition to the display contract. */
+	  rol_principal_display?: string
+	  certificado_vigencia_hasta: string; certificado_vigente: boolean
 }
 export type BeneficiarioListItem = {
   id: number; persona: number; persona_nombre: string; persona_estado: string; rama_actual: number | null

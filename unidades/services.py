@@ -4,7 +4,7 @@ from django.core.exceptions import ValidationError
 from django.db import IntegrityError, transaction
 
 from catalogos.models import ComposicionPermitida
-from personas.models import Beneficiario, EstadoPersona, SexoPersona
+from personas.models import Adulto, Beneficiario, EstadoPersona, RolAdulto, SexoPersona
 from unidades.models import AdultoUnidadRol, RolAdultoUnidad, Subgrupo, SubgrupoMiembro, Unidad
 
 
@@ -127,7 +127,7 @@ def reassign_subgrupo_miembro(*, user, miembro, subgrupo):
 @transaction.atomic
 def create_adulto_unidad_rol(*, user, data):
     unidad = Unidad.objects.select_for_update().get(pk=data["unidad"].pk)
-    adulto = data["adulto"]
+    adulto = Adulto.objects.select_for_update().select_related("persona").get(pk=data["adulto"].pk)
     asignaciones = list(AdultoUnidadRol.objects.select_for_update().filter(unidad=unidad))
     if any(asignacion.adulto_id == adulto.pk for asignacion in asignaciones):
         raise ValidationError({"adulto": "El adulto ya tiene una asignacion en esta unidad."})
@@ -137,9 +137,21 @@ def create_adulto_unidad_rol(*, user, data):
         raise ValidationError({"rol": "La unidad ya tiene una persona responsable."})
     try:
         with transaction.atomic():
-            return _save(AdultoUnidadRol(unidad=unidad, adulto=adulto, rol=data["rol"]), user)
+            asignacion = _save(AdultoUnidadRol(unidad=unidad, adulto=adulto, rol=data["rol"]), user)
     except IntegrityError as exc:
         raise ValidationError({"rol": "No fue posible asignar el rol; la unidad ya tiene una persona responsable."}) from exc
+
+    roles_especiales = {RolAdulto.APODERADO, RolAdulto.RESP_GRUPO, RolAdulto.COLABORADOR}
+    if adulto.rol_principal not in roles_especiales:
+        if adulto.persona.sexo == SexoPersona.FEMENINO:
+            adulto.rol_principal = RolAdulto.GUIA
+        elif adulto.persona.sexo == SexoPersona.MASCULINO:
+            adulto.rol_principal = RolAdulto.DIRIGENTE
+        else:
+            return asignacion
+        _save(adulto, user)
+
+    return asignacion
 
 
 @transaction.atomic
