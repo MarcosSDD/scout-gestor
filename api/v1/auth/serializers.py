@@ -1,8 +1,10 @@
 from rest_framework import serializers
+from rest_framework.exceptions import AuthenticationFailed
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer, TokenRefreshSerializer
 from rest_framework_simplejwt.tokens import RefreshToken, TokenError
 
 from api.v1.access import get_responsable_grupo_ids, get_unidad_roles, get_user_persona
+from common.identity import normalize_identity_email, resolve_user_by_identity_email
 
 
 def serialize_user(user):
@@ -27,8 +29,31 @@ def serialize_user(user):
 
 
 class ScoutTokenObtainPairSerializer(TokenObtainPairSerializer):
+    username_field = "email"
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # TokenObtainSerializer adds these fields dynamically, so configure
+        # them after its initializer to let empty credentials reach the same
+        # generic authentication failure as all other bad credentials.
+        self.fields["email"].allow_blank = True
+        self.fields["password"].allow_blank = True
+
+    def to_internal_value(self, data):
+        unexpected_fields = set(data) - {"email", "password"}
+        if unexpected_fields:
+            raise serializers.ValidationError({"non_field_errors": ["Only email and password are allowed."]})
+        return super().to_internal_value(data)
+
     def validate(self, attrs):
-        data = super().validate(attrs)
+        email = normalize_identity_email(attrs["email"])
+        user = resolve_user_by_identity_email(email)
+        if not email or user is None or not user.is_active or not user.check_password(attrs["password"]):
+            raise AuthenticationFailed(self.error_messages["no_active_account"], "no_active_account")
+
+        self.user = user
+        refresh = self.get_token(user)
+        data = {"refresh": str(refresh), "access": str(refresh.access_token)}
         data["user"] = serialize_user(self.user)
         return data
 

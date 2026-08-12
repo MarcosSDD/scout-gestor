@@ -54,6 +54,7 @@ class ThrottlingIntegrationTests(APITestCase):
         self.addCleanup(self.throttle_rates_patcher.stop)
         self.user = get_user_model().objects.create_user(
             username="throttle-user",
+            email="throttle@example.test",
             password="testpass123",
             is_staff=True,
         )
@@ -69,7 +70,7 @@ class ThrottlingIntegrationTests(APITestCase):
     def _login(self):
         response = self.client.post(
             reverse("v1:auth-token"),
-            {"username": self.user.username, "password": "testpass123"},
+            {"email": self.user.email, "password": "testpass123"},
             format="json",
         )
         self.assertEqual(response.status_code, status.HTTP_200_OK)
@@ -95,7 +96,7 @@ class ThrottlingIntegrationTests(APITestCase):
 
         response = self.client.post(
             reverse("v1:auth-token"),
-            {"username": self.user.username, "password": "testpass123"},
+            {"email": self.user.email, "password": "testpass123"},
             format="json",
         )
 

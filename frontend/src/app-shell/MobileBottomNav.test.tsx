@@ -41,11 +41,11 @@ function renderMobileNav(authUser: AuthUser) {
 }
 
 describe('MobileBottomNav', () => {
-  it('shows mobile management links for responsables', () => {
+  it('hides groups from responsables who are not superusers', () => {
     renderMobileNav(user({ responsable_grupo_ids: [1], persona_id: 1 }))
 
     expect(screen.getByRole('link', { name: 'Dashboard' })).toBeInTheDocument()
-    expect(screen.getByRole('link', { name: 'Grupos' })).toBeInTheDocument()
+    expect(screen.queryByRole('link', { name: 'Grupos' })).not.toBeInTheDocument()
     expect(screen.getByRole('link', { name: 'Personas' })).toBeInTheDocument()
     expect(screen.getByRole('link', { name: 'Unidades' })).toBeInTheDocument()
     expect(screen.getByRole('link', { name: 'Mi perfil' })).toBeInTheDocument()
@@ -60,8 +60,14 @@ describe('MobileBottomNav', () => {
     expect(screen.queryByRole('link', { name: 'Unidades' })).not.toBeInTheDocument()
   })
 
-  it('shows groups for adults with unit scope', () => {
+  it('hides groups for adults with unit scope', () => {
     renderMobileNav(user({ unidad_roles: [{ unidad_id: 3, rol: 'COLABORADOR' }] }))
+
+    expect(screen.queryByRole('link', { name: 'Grupos' })).not.toBeInTheDocument()
+  })
+
+  it('shows groups for superusers', () => {
+    renderMobileNav(user({ is_superuser: true }))
 
     expect(screen.getByRole('link', { name: 'Grupos' })).toBeInTheDocument()
   })

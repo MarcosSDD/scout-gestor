@@ -14,7 +14,7 @@ import { GruposPage } from '../features/grupos/GruposPage'
 import { HealthPage } from '../features/health/HealthPage'
 import { PersonasLayout } from '../features/personas/PersonasLayout'
 import { AdultoDetailPage, ApoderadoDetailPage, BeneficiarioDetailPage, OwnPersonaPage, PersonaDetailPage } from '../features/personas/PersonaDetailPages'
-import { AdultosPage, ApoderadosPage, BeneficiariosPage, PersonasPage } from '../features/personas/PersonasPages'
+import { AdultosPage, ApoderadosPage, BeneficiariosPage } from '../features/personas/PersonasPages'
 import { AsignacionFormPage, BeneficiarioFormPage, CertificadoFormPage, PersonaFormPage } from '../features/personas/PersonaForms'
 import { ProgresionFormPage, ProgresionesPage } from '../features/personas/ProgresionPages'
 import { PlaceholderPage } from '../features/placeholders/PlaceholderPage'
@@ -111,7 +111,7 @@ function App() {
           </RequireAuth>
         )}
       >
-        <Route index element={<PersonasPage />} />
+        <Route index element={<Navigate to="beneficiarios" replace />} />
         <Route path="adultos" element={<AdultosPage />} />
         <Route path="adultos/:adultoId" element={<AdultoDetailPage />} />
         <Route path="adultos/:adultoId/certificado" element={<CertificadoFormPage />} />

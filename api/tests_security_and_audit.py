@@ -3,6 +3,7 @@ import shutil
 import tempfile
 
 from django.contrib.auth import get_user_model
+from django.core.cache import cache
 from django.core.files.base import ContentFile
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import override_settings
@@ -33,13 +34,16 @@ from unidades.models import AdultoUnidadRol, RolAdultoUnidad, Unidad
 
 class SecurityAndAuditApiTests(APITestCase):
     def setUp(self):
+        cache.clear()
         self.media_dir = tempfile.mkdtemp()
         self.settings_override = override_settings(MEDIA_ROOT=self.media_dir)
         self.settings_override.enable()
         self.addCleanup(self.settings_override.disable)
         self.addCleanup(shutil.rmtree, self.media_dir, ignore_errors=True)
 
-        self.staff = get_user_model().objects.create_user("staff9a", password="password", is_staff=True)
+        self.staff = get_user_model().objects.create_user(
+            "staff9a", email="staff9a@example.test", password="password", is_staff=True
+        )
         self.guardian_user = get_user_model().objects.create_user("guardian9a", password="password")
         zona = Zona.objects.create(nombre="Zona 9A")
         distrito = Distrito.objects.create(nombre="Distrito 9A", zona=zona)
@@ -182,7 +186,7 @@ class SecurityAndAuditApiTests(APITestCase):
 
     def test_historial_registra_usuario_en_patch_autenticado(self):
         login = self.client.post(
-            reverse("v1:auth-token"), {"username": "staff9a", "password": "password"}, format="json"
+            reverse("v1:auth-token"), {"email": self.staff.email, "password": "password"}, format="json"
         )
         self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {login.data['data']['access']}")
         response = self.client.patch(

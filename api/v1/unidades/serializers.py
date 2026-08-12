@@ -231,6 +231,18 @@ class OpcionGrupoSerializer(serializers.Serializer):
     nombre = serializers.CharField(source="nombre_oficial")
 
 
+class OpcionUnidadSerializer(serializers.ModelSerializer):
+    grupo_nombre = serializers.CharField(source="grupo.nombre_oficial", read_only=True)
+
+    class Meta:
+        model = Unidad
+        fields = ("id", "nombre", "grupo_nombre", "rama", "estado")
+
+
+class OpcionUnidadQuerySerializer(serializers.Serializer):
+    rama_id = serializers.IntegerField(required=True, min_value=1)
+
+
 class OpcionPersonaSerializer(serializers.Serializer):
     id = serializers.IntegerField()
     nombre = serializers.SerializerMethodField()

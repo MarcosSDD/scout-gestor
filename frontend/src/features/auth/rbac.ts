@@ -1,11 +1,15 @@
 import type { AuthUser } from './authTypes'
 
-export type VisualPermission = 'authenticated' | 'admin' | 'grupo' | 'unidad' | 'apoderado' | 'persona'
+export type VisualPermission = 'authenticated' | 'admin' | 'superuser' | 'grupo' | 'unidad' | 'apoderado' | 'persona'
 
 export type VisualAccessRule = VisualPermission | VisualPermission[]
 
 export function isAdminUser(user: AuthUser | null) {
   return !!user && (user.is_staff || user.is_superuser)
+}
+
+export function isSuperuser(user: AuthUser | null) {
+  return !!user && user.is_superuser
 }
 
 export function isGrupoResponsable(user: AuthUser | null) {
@@ -31,6 +35,10 @@ export function hasVisualPermission(user: AuthUser | null, permission: VisualPer
 
   if (permission === 'authenticated') {
     return true
+  }
+
+  if (permission === 'superuser') {
+    return isSuperuser(user)
   }
 
   if (isAdminUser(user)) {

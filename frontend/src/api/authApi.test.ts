@@ -34,7 +34,7 @@ describe('login', () => {
 
     vi.mocked(httpClient.post).mockResolvedValueOnce({ data: envelope })
 
-    const credentials = { username: 'responsable1', password: 'testpass123' }
+    const credentials = { email: 'resp1@scouts.cl', password: 'testpass123' }
     const result = await login(credentials)
 
     expect(httpClient.post).toHaveBeenCalledWith('/auth/token/', credentials)

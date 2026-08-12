@@ -10,8 +10,8 @@
       "value": "http://127.0.0.1:8000"
     },
     {
-      "key": "username",
-      "value": "stage5user"
+      "key": "email",
+      "value": "demo_staff@demo.scout.local"
     },
     {
       "key": "password",
@@ -132,7 +132,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"username\": \"{{username}}\",\n  \"password\": \"{{password}}\"\n}"
+              "raw": "{\n  \"email\": \"{{email}}\",\n  \"password\": \"{{password}}\"\n}"
             },
             "url": {
               "raw": "{{base_url}}/api/v1/auth/token/",

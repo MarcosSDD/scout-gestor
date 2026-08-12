@@ -49,11 +49,11 @@ describe('LoginPage', () => {
       </MemoryRouter>,
     )
 
-    await user.type(screen.getByLabelText('Usuario'), 'responsable1')
+    await user.type(screen.getByLabelText('Correo electrónico'), 'responsable1@scouts.cl')
     await user.type(screen.getByLabelText('Contraseña'), 'testpass123')
     await user.click(screen.getByRole('button', { name: 'Ingresar' }))
 
-    expect(login).toHaveBeenCalledWith({ username: 'responsable1', password: 'testpass123' })
+    expect(login).toHaveBeenCalledWith({ email: 'responsable1@scouts.cl', password: 'testpass123' })
     expect(navigate).toHaveBeenCalledWith('/app')
   })
 })

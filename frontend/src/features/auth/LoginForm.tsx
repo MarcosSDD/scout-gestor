@@ -17,7 +17,7 @@ export function LoginForm({ onSubmit, isSubmitting, error }: LoginFormProps) {
     const formData = new FormData(event.currentTarget)
 
     onSubmit({
-      username: String(formData.get('username') ?? '').trim(),
+      email: String(formData.get('email') ?? '').trim(),
       password: String(formData.get('password') ?? ''),
     })
   }
@@ -25,9 +25,9 @@ export function LoginForm({ onSubmit, isSubmitting, error }: LoginFormProps) {
   return (
     <form className="login-form" onSubmit={handleSubmit}>
       <div className="form-group icon-input">
-        <label className="field-label" htmlFor="login-username">Usuario</label>
+        <label className="field-label" htmlFor="login-email">Correo electrónico</label>
         <span className="input-icon" aria-hidden="true">@</span>
-        <input id="login-username" name="username" type="text" autoComplete="username" required placeholder="Tu E-mail" aria-label="Usuario" />
+        <input id="login-email" name="email" type="email" autoComplete="email" required placeholder="Tu E-mail" aria-label="Correo electrónico" />
       </div>
 
       <div className="form-group icon-input password-field">

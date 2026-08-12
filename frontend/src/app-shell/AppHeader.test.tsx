@@ -30,12 +30,12 @@ function renderHeader(authUser: AuthUser) {
 }
 
 describe('AppHeader', () => {
-  it('filters quick links for unidad users', () => {
+  it('hides groups from unidad users who are not superusers', () => {
     renderHeader(user({ unidad_roles: [{ unidad_id: 4, rol: 'ASISTENTE' }] }))
 
     expect(screen.getByRole('link', { name: 'Dashboard' })).toBeInTheDocument()
     expect(screen.getByRole('link', { name: 'Unidades' })).toBeInTheDocument()
-    expect(screen.getByRole('link', { name: 'Grupos' })).toBeInTheDocument()
+    expect(screen.queryByRole('link', { name: 'Grupos' })).not.toBeInTheDocument()
   })
 
   it('links avatar to profile when a persona exists', () => {

@@ -1,4 +1,4 @@
-import { canSeeVisualAccess, hasPersona, hasUnidadRole, isAdminUser, isApoderado, isGrupoResponsable } from './rbac'
+import { canSeeVisualAccess, hasPersona, hasUnidadRole, isAdminUser, isApoderado, isGrupoResponsable, isSuperuser } from './rbac'
 import type { AuthUser } from './authTypes'
 
 function user(overrides: Partial<AuthUser> = {}): AuthUser {
@@ -23,6 +23,12 @@ describe('visual RBAC helpers', () => {
     expect(isAdminUser(user({ is_staff: true }))).toBe(true)
     expect(isAdminUser(user({ is_superuser: true }))).toBe(true)
     expect(isAdminUser(user())).toBe(false)
+  })
+
+  it('requires is_superuser for the superuser visual permission', () => {
+    expect(isSuperuser(user({ is_staff: true }))).toBe(false)
+    expect(canSeeVisualAccess(user({ is_staff: true }), 'superuser')).toBe(false)
+    expect(canSeeVisualAccess(user({ is_superuser: true }), 'superuser')).toBe(true)
   })
 
   it('detects scoped user roles from /auth/me fields', () => {

@@ -71,6 +71,34 @@ python manage.py seed_catalogos
 python manage.py runserver 8007
 ```
 
+### Grupo demo local y RBAC
+
+Solo para SQLite local con `DJANGO_DEBUG=true`, se puede crear una muestra completa para probar la UI y los alcances RBAC:
+
+```bash
+unset POSTGRES_DB
+export DJANGO_DEBUG=true
+python manage.py migrate
+python manage.py seed_catalogos
+python manage.py seed_grupo_demo
+```
+
+El comando también ejecuta `seed_catalogos`, es idempotente y crea `Grupo Scout Demo`, seis ramas/unidades/subgrupos, **tres beneficiarios y tres apoderados por unidad** (18 de cada uno), responsables y certificados PDF privados de prueba. El acceso JWT es por correo electrónico; todas estas cuentas usan la contraseña **`ScoutDemo!2026`**:
+
+- `demo_staff@demo.scout.local`
+- `20000201@demo.scout.local` (Responsable de Grupo)
+- `20000202@demo.scout.local` a `20000207@demo.scout.local` (Responsables de Unidad)
+- `20000101@demo.scout.local` (Apoderado; los demás apoderados demo no tienen usuario)
+- `demo_sin_persona@demo.scout.local` (sirve para comprobar ausencia de alcance RBAC)
+
+Para reconstruir exclusivamente los datos identificados del demo (incluidos sus certificados privados), usa la confirmación no interactiva explícita:
+
+```bash
+python manage.py seed_grupo_demo --reset --no-input
+```
+
+**No ejecutar este comando con PostgreSQL ni con `DEBUG=false`**: se rechaza deliberadamente para impedir que credenciales conocidas y datos de muestra lleguen a entornos compartidos o productivos.
+
 Rutas utiles:
 
 - Admin: `http://127.0.0.1:8007/admin/`
@@ -137,7 +165,7 @@ Para desarrollo fullstack, levanta primero backend en `8007` y luego `npm run de
 
 ## Autenticacion frontend
 
-- Login usa `POST /api/v1/auth/token/` con `username` y `password`.
+- Login usa `POST /api/v1/auth/token/` con `email` y `password`. Para una cuenta vinculada a Persona, el correo de Persona es el identificador de acceso.
 - `access` se mantiene en memoria.
 - `refresh` se guarda temporalmente en `sessionStorage`.
 - Al recargar, `AuthProvider` llama `/auth/token/refresh/`, reemplaza el refresh rotado y luego carga usuario desde `GET /auth/me/`.

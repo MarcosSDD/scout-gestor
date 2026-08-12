@@ -41,8 +41,8 @@ function renderSidebar(authUser: AuthUser) {
 }
 
 describe('Sidebar', () => {
-  it('shows full visual navigation for admin users', () => {
-    renderSidebar(user({ is_staff: true, persona_id: 1 }))
+  it('shows grupos only to superusers', () => {
+    renderSidebar(user({ is_superuser: true, persona_id: 1 }))
 
     expect(screen.getByRole('link', { name: /dashboard/i })).toBeInTheDocument()
     expect(screen.getByRole('link', { name: /grupos/i })).toBeInTheDocument()
@@ -50,6 +50,12 @@ describe('Sidebar', () => {
     expect(screen.getByRole('link', { name: /unidades/i })).toBeInTheDocument()
     expect(screen.getByRole('link', { name: /formacion/i })).toBeInTheDocument()
     expect(screen.getByRole('link', { name: /mi perfil/i })).toBeInTheDocument()
+  })
+
+  it('hides grupos from staff users who are not superusers', () => {
+    renderSidebar(user({ is_staff: true, persona_id: 1 }))
+
+    expect(screen.queryByRole('link', { name: /grupos/i })).not.toBeInTheDocument()
   })
 
   it('hides management links from apoderado-only users', () => {

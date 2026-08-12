@@ -1,13 +1,13 @@
 import { httpClient } from './httpClient'
-import { getBeneficiarioOptions, getMembresiaDestinoOptions, getUnidades, patchAdultoUnidadRol, reassignSubgrupoMiembro } from './unidadesApi'
+import { getBeneficiarioOptions, getMembresiaDestinoOptions, getUnidadOptions, getUnidades, patchAdultoUnidadRol, reassignSubgrupoMiembro } from './unidadesApi'
 
 vi.mock('./httpClient', () => ({ httpClient: { get: vi.fn(), patch: vi.fn() } }))
 
 describe('unidadesApi', () => {
-  it('sends unit filters to the API', async () => {
+  it('sends supported unit filters to the API', async () => {
     vi.mocked(httpClient.get).mockResolvedValueOnce({ data: { success: true, message: 'OK', data: [] } })
-    await getUnidades({ search: 'Tropa', estado: 'ACTIVA', grupo_id: 2 })
-    expect(httpClient.get).toHaveBeenCalledWith('/unidades/', { params: { search: 'Tropa', estado: 'ACTIVA', grupo_id: 2 } })
+    await getUnidades({ search: 'Tropa', estado: 'ACTIVA' })
+    expect(httpClient.get).toHaveBeenCalledWith('/unidades/', { params: { search: 'Tropa', estado: 'ACTIVA' } })
   })
 
   it('uses the exact structural option and command contracts', async () => {
@@ -22,5 +22,11 @@ describe('unidadesApi', () => {
     expect(httpClient.patch).toHaveBeenCalledWith('/unidades/subgrupos-miembros/9/reasignacion/', { subgrupo: 11 })
     expect(httpClient.patch).toHaveBeenCalledWith('/unidades/adultos-roles/4/', { rol: 'ASISTENTE' })
     expect(destinations.data[0]).toMatchObject({ unidad: 2, unidad_nombre: 'Tropa' })
+  })
+
+  it('requests unit options scoped by branch', async () => {
+    vi.mocked(httpClient.get).mockResolvedValueOnce({ data: { success: true, message: 'OK', data: [] } })
+    await getUnidadOptions({ rama_id: 4 })
+    expect(httpClient.get).toHaveBeenCalledWith('/unidades/opciones/unidades/', { params: { rama_id: 4 } })
   })
 })

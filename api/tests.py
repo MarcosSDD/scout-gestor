@@ -3,9 +3,11 @@ import tempfile
 from io import BytesIO
 
 from django.conf import settings
+from django.core.cache import cache
 from django.test import SimpleTestCase
 from django.utils import timezone
 from django.contrib.auth import get_user_model
+from django.core.exceptions import ValidationError
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import override_settings
 from django.urls import reverse
@@ -76,12 +78,11 @@ class AuthApiTests(APITestCase):
             last_name="Rojas",
         )
 
+    def _login(self, email="resp1@scouts.cl", password="testpass123"):
+        return self.client.post(reverse("v1:auth-token"), {"email": email, "password": password}, format="json")
+
     def test_token_login_exitoso(self):
-        response = self.client.post(
-            reverse("v1:auth-token"),
-            {"username": "responsable1", "password": "testpass123"},
-            format="json",
-        )
+        response = self._login()
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertTrue(response.data["success"])
@@ -89,23 +90,89 @@ class AuthApiTests(APITestCase):
         self.assertIn("refresh", response.data["data"])
         self.assertEqual(response.data["data"]["user"]["username"], "responsable1")
 
-    def test_token_login_invalido(self):
-        response = self.client.post(
-            reverse("v1:auth-token"),
-            {"username": "responsable1", "password": "badpass"},
-            format="json",
+    def test_token_login_is_case_insensitive_and_rejects_username(self):
+        response = self._login("RESP1@SCOUTS.CL")
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        rejected = self.client.post(
+            reverse("v1:auth-token"), {"username": "responsable1", "password": "testpass123"}, format="json"
         )
+        self.assertEqual(rejected.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_token_login_invalid_credentials_are_generic(self):
+        response = self._login(password="badpass")
+        empty_email = self._login(email="")
 
         self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
         self.assertFalse(response.data["success"])
         self.assertIn("error", response.data)
+        self.assertEqual(empty_email.status_code, status.HTTP_401_UNAUTHORIZED)
+        self.assertEqual(empty_email.data["error"]["message"], response.data["error"]["message"])
+
+    def test_token_login_prefers_linked_persona_email(self):
+        persona = Persona.objects.create(
+            usuario=self.user,
+            rut="11111111-1",
+            nombres="Ana",
+            apellidos="Rojas",
+            fecha_nacimiento="1990-01-01",
+            sexo=SexoPersona.FEMENINO,
+            direccion="Direccion",
+            telefono="123",
+            email="persona@scouts.cl",
+        )
+
+        self.user.refresh_from_db()
+        self.assertEqual(self.user.email, persona.email)
+        self.assertEqual(self._login("PERSONA@SCOUTS.CL").status_code, status.HTTP_200_OK)
+        self.assertEqual(self._login("resp1@scouts.cl").status_code, status.HTTP_401_UNAUTHORIZED)
+
+    def test_token_login_rejects_inactive_and_ambiguous_email_generically(self):
+        self.user.is_active = False
+        self.user.save(update_fields=["is_active"])
+        inactive = self._login()
+        other = get_user_model().objects.create_user(username="other", email="resp1@scouts.cl", password="testpass123")
+        self.user.is_active = True
+        self.user.save(update_fields=["is_active"])
+        ambiguous = self._login()
+
+        self.assertEqual(inactive.status_code, status.HTTP_401_UNAUTHORIZED)
+        self.assertEqual(ambiguous.status_code, status.HTTP_401_UNAUTHORIZED)
+        self.assertEqual(inactive.data["error"]["message"], ambiguous.data["error"]["message"])
+        self.assertIsNotNone(other.pk)
+
+    def test_linked_persona_email_sync_does_not_overwrite_on_blank_or_conflict(self):
+        persona = Persona.objects.create(
+            usuario=self.user,
+            rut="11111111-1",
+            nombres="Ana",
+            apellidos="Rojas",
+            fecha_nacimiento="1990-01-01",
+            sexo=SexoPersona.FEMENINO,
+            direccion="Direccion",
+            telefono="123",
+            email="original@scouts.cl",
+        )
+        persona.email = "UPDATED@SCOUTS.CL"
+        persona.save()
+        self.user.refresh_from_db()
+        self.assertEqual(self.user.email, "updated@scouts.cl")
+
+        persona.email = ""
+        persona.save()
+        self.user.refresh_from_db()
+        self.assertEqual(self.user.email, "updated@scouts.cl")
+
+        other = get_user_model().objects.create_user(username="other", email="conflict@scouts.cl", password="testpass123")
+        persona.email = "conflict@scouts.cl"
+        with self.assertRaises(ValidationError):
+            persona.save()
+        self.user.refresh_from_db()
+        self.assertEqual(self.user.email, "updated@scouts.cl")
+        self.assertIsNotNone(other.pk)
 
     def test_token_refresh_exitoso(self):
-        login = self.client.post(
-            reverse("v1:auth-token"),
-            {"username": "responsable1", "password": "testpass123"},
-            format="json",
-        )
+        login = self._login()
         refresh = login.data["data"]["refresh"]
 
         response = self.client.post(reverse("v1:auth-token-refresh"), {"refresh": refresh}, format="json")
@@ -121,11 +188,7 @@ class AuthApiTests(APITestCase):
         self.assertFalse(response.data["success"])
 
     def test_me_devuelve_usuario(self):
-        login = self.client.post(
-            reverse("v1:auth-token"),
-            {"username": "responsable1", "password": "testpass123"},
-            format="json",
-        )
+        login = self._login()
         access = login.data["data"]["access"]
 
         self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {access}")
@@ -136,11 +199,7 @@ class AuthApiTests(APITestCase):
         self.assertEqual(response.data["data"]["username"], "responsable1")
 
     def test_logout_blacklistea_refresh(self):
-        login = self.client.post(
-            reverse("v1:auth-token"),
-            {"username": "responsable1", "password": "testpass123"},
-            format="json",
-        )
+        login = self._login()
         refresh = login.data["data"]["refresh"]
 
         logout_response = self.client.post(reverse("v1:auth-logout"), {"refresh": refresh}, format="json")
@@ -203,7 +262,7 @@ class CatalogosApiTests(APITestCase):
     def _authenticate(self):
         login = self.client.post(
             reverse("v1:auth-token"),
-            {"username": "cataloguser", "password": "testpass123"},
+            {"email": "catalog@scouts.cl", "password": "testpass123"},
             format="json",
         )
         access = login.data["data"]["access"]
@@ -282,7 +341,7 @@ class GrupoScoutApiTests(APITestCase):
     def _authenticate(self):
         login = self.client.post(
             reverse("v1:auth-token"),
-            {"username": "grupouser", "password": "testpass123"},
+            {"email": "grupos@scouts.cl", "password": "testpass123"},
             format="json",
         )
         access = login.data["data"]["access"]
@@ -431,6 +490,7 @@ class GrupoScoutApiTests(APITestCase):
 
 class PersonasUnidadesApiTests(APITestCase):
     def setUp(self):
+        cache.clear()
         self.media_root = tempfile.mkdtemp()
         self.override_media = override_settings(MEDIA_ROOT=self.media_root)
         self.override_media.enable()
@@ -480,7 +540,7 @@ class PersonasUnidadesApiTests(APITestCase):
     def _authenticate(self):
         login = self.client.post(
             reverse("v1:auth-token"),
-            {"username": "stage4user", "password": "testpass123"},
+            {"email": "stage4@scouts.cl", "password": "testpass123"},
             format="json",
         )
         access = login.data["data"]["access"]
@@ -996,7 +1056,7 @@ class EstructuraJerarquiaApiTests(APITestCase):
     def _authenticate(self):
         login = self.client.post(
             reverse("v1:auth-token"),
-            {"username": "stage5user", "password": "testpass123"},
+            {"email": "stage5@scouts.cl", "password": "testpass123"},
             format="json",
         )
         access = login.data["data"]["access"]
@@ -1283,7 +1343,7 @@ class DashboardApiTests(APITestCase):
     def _authenticate(self):
         login = self.client.post(
             reverse("v1:auth-token"),
-            {"username": "stage6user", "password": "testpass123"},
+            {"email": "stage6@scouts.cl", "password": "testpass123"},
             format="json",
         )
         access = login.data["data"]["access"]
@@ -1444,9 +1504,9 @@ class RbacApiTests(APITestCase):
         )
         self.unidad_otra = Unidad.objects.create(grupo=self.grupo_otro, rama=self.rama, nombre="Unidad RBAC Otra")
 
-        self.staff = get_user_model().objects.create_user("staff", password="testpass123", is_staff=True)
+        self.staff = get_user_model().objects.create_user("staff", email="staff@example.test", password="testpass123", is_staff=True)
 
-        self.user_resp = get_user_model().objects.create_user("resp", password="testpass123")
+        self.user_resp = get_user_model().objects.create_user("resp", email="resp@example.test", password="testpass123")
         persona_resp = Persona.objects.create(
             usuario=self.user_resp,
             rut="20.000.000-5",
@@ -1455,7 +1515,7 @@ class RbacApiTests(APITestCase):
             fecha_nacimiento="1980-01-01",
             sexo=SexoPersona.MASCULINO,
             direccion="Dir",
-            telefono="1",
+            telefono="1", email="resp@example.test",
         )
         adulto_resp = Adulto.objects.create(
             persona=persona_resp,
@@ -1465,7 +1525,7 @@ class RbacApiTests(APITestCase):
         )
         ConsejoGrupo.objects.create(grupo=self.grupo, responsable_grupo=adulto_resp)
 
-        self.user_asistente = get_user_model().objects.create_user("asis", password="testpass123")
+        self.user_asistente = get_user_model().objects.create_user("asis", email="asis@example.test", password="testpass123")
         persona_asis = Persona.objects.create(
             usuario=self.user_asistente,
             rut="20.000.001-3",
@@ -1474,7 +1534,7 @@ class RbacApiTests(APITestCase):
             fecha_nacimiento="1985-01-01",
             sexo=SexoPersona.FEMENINO,
             direccion="Dir",
-            telefono="2",
+            telefono="2", email="asis@example.test",
         )
         adulto_asis = Adulto.objects.create(
             persona=persona_asis,
@@ -1484,7 +1544,7 @@ class RbacApiTests(APITestCase):
         )
         AdultoUnidadRol.objects.create(unidad=self.unidad, adulto=adulto_asis, rol=RolAdultoUnidad.ASISTENTE)
 
-        self.user_colab = get_user_model().objects.create_user("colab", password="testpass123")
+        self.user_colab = get_user_model().objects.create_user("colab", email="colab@example.test", password="testpass123")
         persona_colab = Persona.objects.create(
             usuario=self.user_colab,
             rut="20.000.002-1",
@@ -1493,7 +1553,7 @@ class RbacApiTests(APITestCase):
             fecha_nacimiento="1986-01-01",
             sexo=SexoPersona.MASCULINO,
             direccion="Dir",
-            telefono="3",
+            telefono="3", email="colab@example.test",
         )
         adulto_colab = Adulto.objects.create(
             persona=persona_colab,
@@ -1551,7 +1611,7 @@ class RbacApiTests(APITestCase):
             fecha_ingreso=timezone.localdate(),
         )
 
-        self.user_apo = get_user_model().objects.create_user("apo", password="testpass123")
+        self.user_apo = get_user_model().objects.create_user("apo", email="apo@example.test", password="testpass123")
         persona_apo = Persona.objects.create(
             usuario=self.user_apo,
             rut="20.000.004-8",
@@ -1560,7 +1620,7 @@ class RbacApiTests(APITestCase):
             fecha_nacimiento="1981-01-01",
             sexo=SexoPersona.FEMENINO,
             direccion="Dir",
-            telefono="5",
+            telefono="5", email="apo@example.test",
         )
         apoderado = Apoderado.objects.create(persona=persona_apo)
         self.rel = ApoderadoBeneficiario.objects.create(
@@ -1571,10 +1631,10 @@ class RbacApiTests(APITestCase):
             fecha_autorizacion=timezone.localdate(),
         )
         self.area = AreaDesarrollo.objects.create(codigo="RBAC", nombre="RBAC", definicion="RBAC")
-        self.user_sin_persona = get_user_model().objects.create_user("nopersona", password="testpass123")
+        self.user_sin_persona = get_user_model().objects.create_user("nopersona", email="nopersona@example.test", password="testpass123")
 
     def _auth(self, username):
-        login = self.client.post(reverse("v1:auth-token"), {"username": username, "password": "testpass123"}, format="json")
+        login = self.client.post(reverse("v1:auth-token"), {"email": f"{username}@example.test", "password": "testpass123"}, format="json")
         self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {login.data['data']['access']}")
 
     def test_dashboard_visible_para_adulto_unidad(self):
@@ -1838,6 +1898,92 @@ class RbacApiTests(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         ids = {item["id"] for item in response.data["data"]}
         self.assertEqual(ids, {self.beneficiario.id})
+
+    def test_opciones_unidades_staff_incluye_activas_e_inactivas_y_payload_minimo(self):
+        self.unidad_misma_grupo.estado = "INACTIVA"
+        self.unidad_misma_grupo.save()
+        self._auth("staff")
+
+        response = self.client.get(
+            reverse("v1:unidades-opciones-unidades"), {"rama_id": self.rama.id}
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertTrue(response.data["success"])
+        self.assertEqual(
+            {item["id"] for item in response.data["data"]},
+            {self.unidad.id, self.unidad_misma_grupo.id, self.unidad_otra.id},
+        )
+        self.assertEqual(
+            set(response.data["data"][0]), {"id", "nombre", "grupo_nombre", "rama", "estado"}
+        )
+        self.assertEqual(
+            [(item["grupo_nombre"], item["nombre"]) for item in response.data["data"]],
+            sorted((item["grupo_nombre"], item["nombre"]) for item in response.data["data"]),
+        )
+
+    def test_opciones_unidades_resp_y_adulto_unidad_respetan_alcance(self):
+        self._auth("resp")
+        responsable_response = self.client.get(
+            reverse("v1:unidades-opciones-unidades"), {"rama_id": self.rama.id}
+        )
+        self.assertEqual(responsable_response.status_code, status.HTTP_200_OK)
+        self.assertEqual(
+            {item["id"] for item in responsable_response.data["data"]},
+            {self.unidad.id, self.unidad_misma_grupo.id},
+        )
+
+        self._auth("asis")
+        unidad_response = self.client.get(
+            reverse("v1:unidades-opciones-unidades"), {"rama_id": self.rama.id}
+        )
+        self.assertEqual(unidad_response.status_code, status.HTTP_200_OK)
+        self.assertEqual({item["id"] for item in unidad_response.data["data"]}, {self.unidad.id})
+
+    def test_opciones_unidades_apoderado_incluye_solo_unidad_de_beneficiario_relacionado(self):
+        self._auth("apo")
+
+        response = self.client.get(
+            reverse("v1:unidades-opciones-unidades"), {"rama_id": self.rama.id}
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual({item["id"] for item in response.data["data"]}, {self.unidad.id})
+        self.assertNotIn(self.unidad_otra.id, {item["id"] for item in response.data["data"]})
+
+    def test_opciones_unidades_requiere_rama_id_entero_positivo(self):
+        self._auth("staff")
+        url = reverse("v1:unidades-opciones-unidades")
+
+        for params in ({}, {"rama_id": "invalida"}, {"rama_id": 0}, {"rama_id": -1}):
+            response = self.client.get(url, params)
+            self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+            self.assertFalse(response.data["success"])
+            self.assertIn("rama_id", response.data["error"]["details"])
+
+    def test_opciones_unidades_requiere_autenticacion(self):
+        response = self.client.get(
+            reverse("v1:unidades-opciones-unidades"), {"rama_id": self.rama.id}
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
+        self.assertFalse(response.data["success"])
+
+    def test_opciones_unidades_devuelve_todas_las_opciones_sin_paginar(self):
+        unidades_adicionales = [
+            Unidad(grupo=self.grupo, rama=self.rama, nombre=f"Unidad masiva {indice:02d}")
+            for indice in range(21)
+        ]
+        Unidad.objects.bulk_create(unidades_adicionales)
+        self._auth("staff")
+
+        response = self.client.get(
+            reverse("v1:unidades-opciones-unidades"), {"rama_id": self.rama.id}
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(response.data["data"]), 24)
+        self.assertNotIn("meta", response.data)
 
     def test_listados_omiten_pii_y_ruta_de_certificado(self):
         self._auth("staff")

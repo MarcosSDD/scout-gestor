@@ -4,6 +4,7 @@ from pathlib import Path
 from uuid import uuid4
 
 from common.models import TimeStampedModel
+from common.identity import validate_and_sync_persona_user_email
 from common.validators import normalizar_rut, validar_certificado_inhabilidades, validar_foto_persona, validar_rut
 from simple_history.models import HistoricalRecords
 
@@ -80,6 +81,7 @@ class Persona(TimeStampedModel):
 
     def save(self, *args, **kwargs):
         self.rut = normalizar_rut(self.rut)
+        validate_and_sync_persona_user_email(self)
         super().save(*args, **kwargs)
 
 

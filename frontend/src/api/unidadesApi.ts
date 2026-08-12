@@ -20,10 +20,11 @@ export type SubgrupoPayload = { nombre: string; unidad: number; lider_juvenil?: 
 export type SubgrupoMiembro = { id: number; subgrupo: number; subgrupo_nombre: string; beneficiario: number; beneficiario_persona_nombre: string }
 export type AdultoUnidadRol = { id: number; unidad: number; unidad_nombre: string; adulto: number; adulto_persona_nombre: string; rol: string }
 export type Opcion = { id: number; nombre: string }
+export type OpcionUnidad = Opcion & { grupo_nombre: string; estado: 'ACTIVA' | 'INACTIVA' }
 export type OpcionDestinoMembresia = Opcion & { unidad: number; unidad_nombre: string }
 export type StructuralPermissions = { can_edit?: boolean; can_assign_leader?: boolean; can_reassign?: boolean; can_edit_role?: boolean }
 export type StructuralDetailMeta = { permissions?: StructuralPermissions }
-export type OptionParams = { page?: number; search?: string; unidad_id?: number; miembro_id?: number; subgrupo_id?: number }
+export type OptionParams = { page?: number; search?: string; unidad_id?: number; rama_id?: number; miembro_id?: number; subgrupo_id?: number }
 type List<T> = ApiSuccess<T[], PaginatedMeta>
 
 export async function getUnidades(params?: UnidadesQueryParams): Promise<ApiSuccess<UnidadListItem[], PaginatedMeta>> {
@@ -52,6 +53,7 @@ export async function createAdultoUnidadRol(payload: { unidad: number; adulto: n
 export async function patchAdultoUnidadRol(id: number, rol: string) { const { data } = await httpClient.patch<ApiSuccess<AdultoUnidadRol>>(`/unidades/adultos-roles/${id}/`, { rol }); return data }
 async function options<T extends Opcion>(path: string, params: OptionParams): Promise<List<T>> { const { data } = await httpClient.get<List<T>>(path, { params }); return data }
 export const getGrupoOptions = (params: OptionParams = {}) => options('/unidades/opciones/grupos/', params)
+export const getUnidadOptions = (params: Pick<OptionParams, 'rama_id'>) => options<OpcionUnidad>('/unidades/opciones/unidades/', params)
 export const getBeneficiarioOptions = (params: OptionParams) => options('/unidades/opciones/beneficiarios/', params)
 export const getAdultoOptions = (params: OptionParams) => options('/unidades/opciones/adultos/', params)
 export const getMembresiaDestinoOptions = (params: OptionParams) => options<OpcionDestinoMembresia>('/unidades/opciones/destinos-membresia/', params)

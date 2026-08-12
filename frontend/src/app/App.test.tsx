@@ -1,6 +1,6 @@
 import { render, screen } from '@testing-library/react'
 import type { ReactNode } from 'react'
-import { MemoryRouter } from 'react-router-dom'
+import { MemoryRouter, Outlet } from 'react-router-dom'
 import App from './App'
 
 import { useHealthQuery } from '../features/health/useHealthQuery'
@@ -23,9 +23,9 @@ vi.mock('../features/grupos/GrupoDetailPage', () => ({
   GrupoDetailPage: () => <><h1>Grupo detalle</h1><p>Estructura visible mock</p></>,
 }))
 
-vi.mock('../features/personas/PersonasLayout', () => ({ PersonasLayout: () => <div>Personas layout mock</div> }))
+vi.mock('../features/personas/PersonasLayout', () => ({ PersonasLayout: () => <Outlet /> }))
 vi.mock('../features/personas/PersonasPages', () => ({
-  PersonasPage: () => <h1>Personas</h1>, AdultosPage: () => <h1>Adultos</h1>, BeneficiariosPage: () => <h1>Beneficiarios</h1>, ApoderadosPage: () => <h1>Apoderados</h1>,
+    AdultosPage: () => <h1>Guías y Dirigentes</h1>, BeneficiariosPage: () => <h1>Beneficiarios</h1>, ApoderadosPage: () => <h1>Apoderados</h1>,
 }))
 vi.mock('../features/personas/PersonaDetailPages', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../features/personas/PersonaDetailPages')>()
@@ -160,17 +160,30 @@ describe('App', () => {
     expect(screen.getByLabelText('Navegacion principal')).toBeInTheDocument()
   })
 
-  it('shows forbidden UX for direct access to hidden visual routes', () => {
+  it('shows forbidden UX for staff direct access to the superuser-only groups route', () => {
     render(
       withAuth(
         <MemoryRouter initialEntries={['/app/grupos']}>
           <App />
         </MemoryRouter>,
-        authValue({ status: 'authenticated', user: authUser, isAuthenticated: true }),
+        authValue({ status: 'authenticated', user: adminUser, isAuthenticated: true }),
       ),
     )
 
     expect(screen.getByRole('heading', { name: '403' })).toBeInTheDocument()
+  })
+
+  it('redirects the people index to beneficiaries', () => {
+    render(
+      withAuth(
+        <MemoryRouter initialEntries={['/app/personas']}>
+          <App />
+        </MemoryRouter>,
+        authValue({ status: 'authenticated', user: adminUser, isAuthenticated: true }),
+      ),
+    )
+
+    expect(screen.getByRole('heading', { name: 'Beneficiarios' })).toBeInTheDocument()
   })
 
   it('keeps administrative people lists hidden from apoderado-only users', () => {

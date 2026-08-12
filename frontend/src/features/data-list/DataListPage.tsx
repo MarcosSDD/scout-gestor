@@ -1,10 +1,13 @@
-import type { FormEvent, ReactNode } from 'react'
+import type { ChangeEventHandler, FormEvent, ReactNode } from 'react'
 import { Link } from 'react-router-dom'
 
 import type { ApiError, PaginatedMeta } from '../../api/types'
 import { GrupoStateCard } from '../grupos/GrupoStateCard'
 
-export type ListFilter = { name: string; label: string; type?: 'search' | 'select' | 'number'; options?: Array<{ value: string; label: string }> }
+export type ListFilter = {
+  name: string; label: string; type?: 'search' | 'select' | 'number'; placeholder?: string; options?: Array<{ value: string; label: string }>
+  value?: string; onChange?: ChangeEventHandler<HTMLSelectElement>; disabled?: boolean; loading?: boolean; emptyOption?: string
+}
 export type ListColumn<T> = { label: string; render: (item: T) => ReactNode }
 
 type DataListPageProps<T extends { id: number }> = {
@@ -49,10 +52,10 @@ export function DataListPage<T extends { id: number }>(props: DataListPageProps<
           <label key={filter.name}>
             <span>{filter.label}</span>
             {filter.type === 'select' ? (
-              <select name={filter.name} defaultValue={String(params[filter.name] ?? '')}>
-                <option value="">Todos</option>{filter.options?.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+              <select name={filter.name} value={filter.value} defaultValue={filter.value === undefined ? String(params[filter.name] ?? '') : undefined} onChange={filter.onChange} disabled={filter.disabled || filter.loading}>
+                <option value="">{filter.loading ? `Cargando ${filter.label.toLowerCase()}…` : filter.emptyOption ?? 'Todos'}</option>{filter.options?.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
               </select>
-            ) : <input name={filter.name} type={filter.type ?? 'search'} defaultValue={String(params[filter.name] ?? '')} placeholder={filter.type === 'number' ? 'Identificador' : 'Buscar'} />}
+            ) : <input name={filter.name} type={filter.type ?? 'search'} defaultValue={String(params[filter.name] ?? '')} placeholder={filter.placeholder ?? (filter.type === 'number' ? 'Identificador' : 'Buscar')} />}
           </label>
         ))}
         <button className="primary-button" type="submit">Aplicar filtros</button>

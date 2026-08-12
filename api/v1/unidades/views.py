@@ -7,13 +7,15 @@ from rest_framework.generics import GenericAPIView
 
 from api.v1.access import (
     can_edit_unidad, can_manage_group_data, get_accessible_adultos_qs,
+    get_accessible_beneficiarios_qs,
     get_accessible_subgrupo_miembros_qs,
     get_accessible_subgrupos_qs, get_accessible_unidades_qs, get_editable_unidad_ids,
     get_manageable_grupos_qs, is_full_access,
 )
 from api.v1.responses import success_response
 from api.v1.unidades.serializers import (
-    AdultoUnidadRolListSerializer, AdultoUnidadRolWriteSerializer, OpcionGrupoSerializer,
+    AdultoUnidadRolListSerializer, AdultoUnidadRolWriteSerializer, OpcionGrupoSerializer, OpcionUnidadQuerySerializer,
+    OpcionUnidadSerializer,
     OpcionDestinoMembresiaSerializer, OpcionPersonaSerializer, SubgrupoListSerializer, SubgrupoMiembroListSerializer,
     SubgrupoMiembroReasignacionSerializer, SubgrupoMiembroWriteSerializer,
     SubgrupoWriteSerializer, UnidadDetailSerializer, UnidadListSerializer, UnidadWriteSerializer,
@@ -246,6 +248,25 @@ class OpcionesGruposView(_ListResponseMixin, GenericAPIView):
         if request.query_params.get("search"):
             queryset = queryset.filter(nombre_oficial__icontains=request.query_params["search"].strip())
         return self._list_response(queryset, OpcionGrupoSerializer)
+
+
+class OpcionesUnidadesView(GenericAPIView):
+    def get(self, request):
+        query_serializer = OpcionUnidadQuerySerializer(data=request.query_params)
+        query_serializer.is_valid(raise_exception=True)
+
+        accessible_beneficiarios = get_accessible_beneficiarios_qs(request.user)
+        queryset = (
+            Unidad.objects.select_related("grupo", "rama")
+            .filter(
+                Q(pk__in=get_accessible_unidades_qs(request.user))
+                | Q(pk__in=accessible_beneficiarios.values("unidad_id")),
+                rama_id=query_serializer.validated_data["rama_id"],
+            )
+            .distinct()
+            .order_by("grupo__nombre_oficial", "nombre")
+        )
+        return success_response(data=OpcionUnidadSerializer(queryset, many=True).data)
 
 
 class OpcionesBeneficiariosView(_ListResponseMixin, GenericAPIView):

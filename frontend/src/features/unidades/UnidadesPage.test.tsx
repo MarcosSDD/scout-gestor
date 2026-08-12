@@ -1,4 +1,4 @@
-import { screen } from '@testing-library/react'
+import { fireEvent, screen } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
 
 import { getUnidades } from '../../api/unidadesApi'
@@ -14,5 +14,12 @@ describe('UnidadesPage', () => {
     renderWithQueryClient(<AuthContext value={{ status: 'authenticated', isAuthenticated: true, login: vi.fn(), logout: vi.fn(), user: { id: 1, username: 'staff', email: '', first_name: '', last_name: '', is_staff: true, is_superuser: false, persona_id: 1, responsable_grupo_ids: [], unidad_roles: [], is_apoderado: false } }}><MemoryRouter><UnidadesPage /></MemoryRouter></AuthContext>)
     expect(await screen.findByText('Tropa A')).toBeInTheDocument()
     expect(screen.getByText('Grupo We Lemu')).toBeInTheDocument()
+    expect(screen.getByLabelText('Nombre de unidad')).toHaveAttribute('placeholder', 'Buscar por nombre')
+    expect(screen.queryByLabelText('Grupo')).not.toBeInTheDocument()
+    expect(screen.queryByLabelText('Rama')).not.toBeInTheDocument()
+
+    fireEvent.change(screen.getByLabelText('Nombre de unidad'), { target: { value: 'Tropa' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Aplicar filtros' }))
+    expect(getUnidades).toHaveBeenLastCalledWith({ search: 'Tropa' })
   })
 })

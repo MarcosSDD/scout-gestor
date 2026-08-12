@@ -1,5 +1,5 @@
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { createAdultoUnidadRol, createSubgrupo, createSubgrupoMiembro, createUnidad, getAdultoOptions, getAdultoUnidadRol, getAdultoUnidadRoles, getBeneficiarioOptions, getGrupoOptions, getMembresiaDestinoOptions, getSubgrupo, getSubgrupoMiembro, getSubgrupoMiembros, getSubgrupos, patchAdultoUnidadRol, patchSubgrupo, patchUnidad, reassignSubgrupoMiembro, type OptionParams } from '../../api/unidadesApi'
+import { createAdultoUnidadRol, createSubgrupo, createSubgrupoMiembro, createUnidad, getAdultoOptions, getAdultoUnidadRol, getAdultoUnidadRoles, getBeneficiarioOptions, getGrupoOptions, getMembresiaDestinoOptions, getSubgrupo, getSubgrupoMiembro, getSubgrupoMiembros, getSubgrupos, getUnidadOptions, patchAdultoUnidadRol, patchSubgrupo, patchUnidad, reassignSubgrupoMiembro, type OptionParams } from '../../api/unidadesApi'
 import { toApiError } from '../../api/errors'
 import { unidadesQueryKeys } from './unidadesQueryKeys'
 
@@ -14,6 +14,10 @@ export const useAdultoRolQuery = (id: number) => useQuery({ queryKey: unidadesQu
 export function useOptionQuery(kind: 'grupos' | 'beneficiarios' | 'adultos' | 'destinos', params: OptionParams) {
   const request = { grupos: getGrupoOptions, beneficiarios: getBeneficiarioOptions, adultos: getAdultoOptions, destinos: getMembresiaDestinoOptions }[kind]
   return useQuery({ queryKey: unidadesQueryKeys.options(kind, params), enabled: kind === 'grupos' || Boolean(params.unidad_id || params.miembro_id || params.subgrupo_id), placeholderData: keepPreviousData, queryFn: safe(() => request(params)) })
+}
+export function useUnidadOptionsQuery(ramaId?: number) {
+  const params = ramaId ? { rama_id: ramaId } : {}
+  return useQuery({ queryKey: unidadesQueryKeys.options('unidades', params), enabled: Boolean(ramaId), queryFn: safe(() => getUnidadOptions({ rama_id: ramaId! })) })
 }
 
 // Commands deliberately invalidate whole domain prefixes: a move can affect both source and destination.
