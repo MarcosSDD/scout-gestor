@@ -1,6 +1,6 @@
 import { fireEvent, render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { MemoryRouter } from 'react-router-dom'
+import { createMemoryRouter, RouterProvider } from 'react-router-dom'
 
 import { ConfirmingBackLink } from './StructuralForms'
 
@@ -19,7 +19,8 @@ describe('ConfirmingBackLink', () => {
 
   async function openDialog() {
     const user = userEvent.setup()
-    render(<MemoryRouter><ConfirmingBackLink dirty /></MemoryRouter>)
+    const router = createMemoryRouter([{ path: '/', element: <ConfirmingBackLink dirty /> }, { path: '/app/unidades', element: <h1>Unidades</h1> }], { initialEntries: ['/'] })
+    render(<RouterProvider router={router} />)
     const trigger = screen.getByRole('button', { name: /volver/i })
     await user.click(trigger)
     return { trigger, user, dialog: screen.getByRole('dialog') }
@@ -50,5 +51,17 @@ describe('ConfirmingBackLink', () => {
 
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
     expect(trigger).toHaveFocus()
+  })
+
+  it('uses the shared dialog markup and discards changes before navigating', async () => {
+    const { user, dialog } = await openDialog()
+
+    expect(dialog).toHaveClass('unsaved-changes-dialog')
+    expect(screen.getByText('Si sales ahora, se perderán los cambios sin guardar.')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Seguir editando' })).toHaveClass('unsaved-changes-dialog__button--secondary')
+    expect(screen.getByRole('button', { name: 'Descartar cambios' })).toHaveClass('unsaved-changes-dialog__button--destructive')
+    await user.click(screen.getByRole('button', { name: 'Descartar cambios' }))
+
+    expect(await screen.findByRole('heading', { name: 'Unidades' })).toBeInTheDocument()
   })
 })

@@ -22,4 +22,22 @@ describe('UnidadesPage', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Aplicar filtros' }))
     expect(getUnidades).toHaveBeenLastCalledWith({ search: 'Tropa' })
   })
+
+  it('shows the new unit action inside the hero for authorized users', async () => {
+    vi.mocked(getUnidades).mockResolvedValueOnce({ success: true, message: 'OK', data: [] })
+    renderWithQueryClient(<AuthContext value={{ status: 'authenticated', isAuthenticated: true, login: vi.fn(), logout: vi.fn(), user: { id: 1, username: 'responsable', email: '', first_name: '', last_name: '', is_staff: false, is_superuser: false, persona_id: 1, responsable_grupo_ids: [4], unidad_roles: [], is_apoderado: false } }}><MemoryRouter><UnidadesPage /></MemoryRouter></AuthContext>)
+
+    await screen.findByRole('heading', { name: 'Unidades' })
+    const action = screen.getByRole('link', { name: 'Nueva Unidad' })
+    expect(action).toHaveAttribute('href', '/app/unidades/nueva')
+    expect(action.closest('.data-list-hero-actions')).not.toBeNull()
+  })
+
+  it('does not show the new unit action to unauthorized users', async () => {
+    vi.mocked(getUnidades).mockResolvedValueOnce({ success: true, message: 'OK', data: [] })
+    renderWithQueryClient(<AuthContext value={{ status: 'authenticated', isAuthenticated: true, login: vi.fn(), logout: vi.fn(), user: { id: 1, username: 'unidad', email: '', first_name: '', last_name: '', is_staff: false, is_superuser: false, persona_id: 1, responsable_grupo_ids: [], unidad_roles: [{ unidad_id: 4, rol: 'ASISTENTE' }], is_apoderado: false } }}><MemoryRouter><UnidadesPage /></MemoryRouter></AuthContext>)
+
+    await screen.findByRole('heading', { name: 'Unidades' })
+    expect(screen.queryByRole('link', { name: 'Nueva Unidad' })).not.toBeInTheDocument()
+  })
 })

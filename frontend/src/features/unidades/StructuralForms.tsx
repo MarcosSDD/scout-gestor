@@ -1,4 +1,4 @@
-import { useEffect, useId, useRef, useState, type ReactNode } from 'react'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useForm, useWatch } from 'react-hook-form'
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
@@ -10,6 +10,7 @@ import { FormActions } from '../forms/FormActions'
 import { FormErrorSummary } from '../forms/FormErrorSummary'
 import { FormField } from '../forms/FormField'
 import { FormSelect } from '../forms/FormSelect'
+import { UnsavedChangesDialog } from '../forms/UnsavedChangesDialog'
 import { useUnsavedChanges } from '../forms/useUnsavedChanges'
 import { allowDirtyNavigation } from '../forms/useDirtyNavigationGuard'
 import { PaginatedOptionPicker } from './PaginatedOptionPicker'
@@ -21,34 +22,18 @@ const asId = (raw?: string) => Number(raw) || 0
 const summary = (errors: Record<string, { message?: string } | undefined>, global: string[]) => [...Object.entries(errors).flatMap(([name, value]) => value?.message ? [{ name, message: value.message }] : []), ...global.map((message) => ({ message }))]
 
 export function ConfirmingBackLink({ dirty }: { dirty: boolean }) {
-  const [open, setOpen] = useState(false); const dialogId = useId(); const dialogRef = useRef<HTMLDialogElement>(null); const triggerRef = useRef<HTMLButtonElement>(null); const shouldRestoreFocusRef = useRef(false)
-  function closeDialog() {
-    shouldRestoreFocusRef.current = true
-    dialogRef.current?.close()
-    setOpen(false)
-  }
-  useEffect(() => {
-    const dialog = dialogRef.current
-    if (!dialog || !open) return
-    if (!dialog.open) dialog.showModal()
-  }, [open])
-  useEffect(() => {
-    if (!open && shouldRestoreFocusRef.current) {
-      triggerRef.current?.focus()
-      shouldRestoreFocusRef.current = false
-    }
-  }, [open])
+  const [open, setOpen] = useState(false); const triggerRef = useRef<HTMLButtonElement>(null); const navigate = useNavigate()
   if (!dirty) return <Link className="grupos-back-link" to="/app/unidades">← Volver</Link>
-  return <><button ref={triggerRef} className="grupos-back-link" type="button" onClick={() => setOpen(true)}>← Volver</button>{open ? <dialog ref={dialogRef} className="confirm-dialog" aria-labelledby={`${dialogId}-title`} onCancel={(event) => { event.preventDefault(); closeDialog() }} onClick={(event) => { if (event.target === event.currentTarget) closeDialog() }}><div className="confirm-dialog__panel"><h2 id={`${dialogId}-title`}>Cambios sin guardar</h2><p>Si sales ahora, se perderán los cambios no guardados.</p><div><Link className="primary-button" to="/app/unidades" onClick={allowDirtyNavigation}>Salir sin guardar</Link><button type="button" onClick={closeDialog}>Seguir editando</button></div></div></dialog> : null}</>
+  return <><button ref={triggerRef} className="grupos-back-link" type="button" onClick={() => setOpen(true)}>← Volver</button><UnsavedChangesDialog open={open} restoreFocusRef={triggerRef} onContinueEditing={() => setOpen(false)} onDiscard={() => { allowDirtyNavigation(); navigate('/app/unidades') }} /></>
 }
-function Page({ title, dirty, children }: { title: string; dirty?: boolean; children: ReactNode }) { return <section className="home-feed form-page" aria-labelledby="structural-title"><ConfirmingBackLink dirty={Boolean(dirty)} /><article className="home-card"><h1 id="structural-title">{title}</h1>{children}</article></section> }
+function Page({ title, dirty, children }: { title: string; dirty?: boolean; children: ReactNode }) { const unsavedChangesDialog = useUnsavedChanges(Boolean(dirty)); return <>{unsavedChangesDialog}<section className="home-feed form-page" aria-labelledby="structural-title"><ConfirmingBackLink dirty={Boolean(dirty)} /><article className="home-card"><h1 id="structural-title">{title}</h1>{children}</article></section></> }
 function State({ message }: { message: string }) { return <Page title="Gestión estructural"><p role="alert">{message}</p></Page> }
 function useServerErrors<T extends Record<string, unknown>>(form: ReturnType<typeof useForm<T>>, fields: readonly (keyof T & string)[]) { const [errors, setErrors] = useState<string[]>([]); return { errors, handle(error: unknown) { const api = toApiError(error); setErrors(applyDrfErrors(api.error.details, form.setError, fields as never)) } } }
 function useRamas() { const [ramas, setRamas] = useState<Array<{ id: number; nombre: string }>>([]); useEffect(() => { void getRamas({ activa: true }).then((r) => setRamas(r.data)).catch(() => setRamas([])) }, []); return ramas }
 
 export function UnidadFormPage() {
   const { unidadId } = useParams(); const [searchParams] = useSearchParams(); const id = asId(unidadId); const editing = id > 0; const detail = useUnidadDetailQuery(id); const command = useUnidadCommand(); const navigate = useNavigate(); const [page, setPage] = useState(1); const [search, setSearch] = useState('')
-  const form = useForm<UnidadFormValues>({ resolver: zodResolver(unidadSchema), defaultValues: { grupo: asId(searchParams.get('grupo_id') ?? undefined), rama: 0, nombre: '', tipo_composicion: '', estado: 'ACTIVA', cupo_maximo: null } }); const server = useServerErrors(form, ['grupo', 'rama', 'nombre', 'tipo_composicion', 'estado', 'cupo_maximo']); useUnsavedChanges(form.formState.isDirty)
+  const form = useForm<UnidadFormValues>({ resolver: zodResolver(unidadSchema), defaultValues: { grupo: asId(searchParams.get('grupo_id') ?? undefined), rama: 0, nombre: '', tipo_composicion: '', estado: 'ACTIVA', cupo_maximo: null } }); const server = useServerErrors(form, ['grupo', 'rama', 'nombre', 'tipo_composicion', 'estado', 'cupo_maximo']);
   const groups = useOptionQuery('grupos', { page, search }); const ramas = useRamas(); const group = useWatch({ control: form.control, name: 'grupo' })
   useEffect(() => { const unit = detail.data?.data; if (unit) form.reset({ grupo: unit.grupo, rama: unit.rama, nombre: unit.nombre, tipo_composicion: unit.tipo_composicion, estado: unit.estado as UnidadFormValues['estado'], cupo_maximo: unit.cupo_maximo }) }, [detail.data, form])
   if (editing && detail.isLoading) return <State message="Cargando unidad…" />
@@ -59,7 +44,7 @@ export function UnidadFormPage() {
 }
 
 export function SubgrupoFormPage() {
-  const { subgrupoId, unidadId } = useParams(); const id = asId(subgrupoId); const editing = id > 0; const detail = useSubgrupoQuery(id); const command = useSubgrupoCommand(); const navigate = useNavigate(); const form = useForm<SubgrupoFormValues>({ resolver: zodResolver(subgrupoSchema), defaultValues: { unidad: asId(unidadId), nombre: '', lider_juvenil: null } }); const server = useServerErrors(form, ['unidad', 'nombre', 'lider_juvenil']); useUnsavedChanges(form.formState.isDirty)
+  const { subgrupoId, unidadId } = useParams(); const id = asId(subgrupoId); const editing = id > 0; const detail = useSubgrupoQuery(id); const command = useSubgrupoCommand(); const navigate = useNavigate(); const form = useForm<SubgrupoFormValues>({ resolver: zodResolver(subgrupoSchema), defaultValues: { unidad: asId(unidadId), nombre: '', lider_juvenil: null } }); const server = useServerErrors(form, ['unidad', 'nombre', 'lider_juvenil']);
   const leaderOptions = useOptionQuery('beneficiarios', { subgrupo_id: id }); const leader = useWatch({ control: form.control, name: 'lider_juvenil' }); useEffect(() => { const subgroup = detail.data?.data; if (subgroup) form.reset(subgroup) }, [detail.data, form])
   if (editing && detail.isLoading) return <State message="Cargando subgrupo…" />
   if (editing && (detail.isError || !detail.data?.data)) return <State message="El subgrupo no está disponible o no tienes acceso." />
@@ -68,7 +53,7 @@ export function SubgrupoFormPage() {
 }
 
 export function MiembroFormPage() {
-  const { miembroId, subgrupoId, unidadId } = useParams(); const id = asId(miembroId); const editing = id > 0; const member = useMiembroQuery(id); const command = useMiembroCommand(); const navigate = useNavigate(); const [confirming, setConfirming] = useState(false); const form = useForm<MiembroFormValues | ReasignacionFormValues>({ resolver: zodResolver(editing ? reasignacionSchema : miembroSchema), defaultValues: editing ? { subgrupo: 0 } : { subgrupo: asId(subgrupoId), beneficiario: 0 } }); const server = useServerErrors(form, (editing ? ['subgrupo'] : ['subgrupo', 'beneficiario']) as never); useUnsavedChanges(form.formState.isDirty)
+  const { miembroId, subgrupoId, unidadId } = useParams(); const id = asId(miembroId); const editing = id > 0; const member = useMiembroQuery(id); const command = useMiembroCommand(); const navigate = useNavigate(); const [confirming, setConfirming] = useState(false); const form = useForm<MiembroFormValues | ReasignacionFormValues>({ resolver: zodResolver(editing ? reasignacionSchema : miembroSchema), defaultValues: editing ? { subgrupo: 0 } : { subgrupo: asId(subgrupoId), beneficiario: 0 } }); const server = useServerErrors(form, (editing ? ['subgrupo'] : ['subgrupo', 'beneficiario']) as never);
   const options = useOptionQuery(editing ? 'destinos' : 'beneficiarios', editing ? { miembro_id: id } : { unidad_id: asId(unidadId) }); const parentSubgrupo = useSubgrupoQuery(member.data?.data.subgrupo ?? 0); const selected = useWatch({ control: form.control, name: editing ? 'subgrupo' : 'beneficiario' })
   if (editing && member.isLoading) return <State message="Cargando membresía…" />
   if (editing && (member.isError || !member.data?.data || !member.data.meta?.permissions?.can_reassign)) return <State message="No puedes reasignar esta membresía." />
@@ -77,7 +62,7 @@ export function MiembroFormPage() {
 }
 
 export function AdultoRolFormPage() {
-  const { asignacionId, unidadId } = useParams(); const id = asId(asignacionId); const editing = id > 0; const detail = useAdultoRolQuery(id); const command = useAdultoRolCommand(); const navigate = useNavigate(); const form = useForm<AdultoUnidadFormValues>({ resolver: zodResolver(adultoUnidadSchema), defaultValues: { unidad: asId(unidadId), adulto: 0, rol: 'ASISTENTE' } }); const server = useServerErrors(form, ['unidad', 'adulto', 'rol']); useUnsavedChanges(form.formState.isDirty)
+  const { asignacionId, unidadId } = useParams(); const id = asId(asignacionId); const editing = id > 0; const detail = useAdultoRolQuery(id); const command = useAdultoRolCommand(); const navigate = useNavigate(); const form = useForm<AdultoUnidadFormValues>({ resolver: zodResolver(adultoUnidadSchema), defaultValues: { unidad: asId(unidadId), adulto: 0, rol: 'ASISTENTE' } }); const server = useServerErrors(form, ['unidad', 'adulto', 'rol']);
   const adults = useOptionQuery('adultos', { unidad_id: editing ? detail.data?.data.unidad : asId(unidadId) }); const adult = useWatch({ control: form.control, name: 'adulto' }); useEffect(() => { const assignment = detail.data?.data; if (assignment) form.reset({ unidad: assignment.unidad, adulto: assignment.adulto, rol: assignment.rol as AdultoUnidadFormValues['rol'] }) }, [detail.data, form])
   if (editing && detail.isLoading) return <State message="Cargando asignación…" />
   if (editing && (detail.isError || !detail.data?.data || !detail.data.meta?.permissions?.can_edit_role)) return <State message="No puedes editar esta asignación." />

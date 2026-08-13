@@ -1,5 +1,5 @@
 import { useDirtyNavigationGuard } from './useDirtyNavigationGuard'
 
 export function useUnsavedChanges(isDirty: boolean) {
-  useDirtyNavigationGuard(isDirty)
+  return useDirtyNavigationGuard(isDirty)
 }

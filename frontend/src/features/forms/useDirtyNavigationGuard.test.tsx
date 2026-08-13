@@ -3,7 +3,7 @@ import userEvent from '@testing-library/user-event'
 import { createMemoryRouter, Link, RouterProvider } from 'react-router-dom'
 import { useDirtyNavigationGuard } from './useDirtyNavigationGuard'
 
-function DirtyPage() { useDirtyNavigationGuard(true); return <><h1>Formulario</h1><Link to="/destino">Salir</Link></> }
+function DirtyPage() { const dialog = useDirtyNavigationGuard(true); return <><h1>Formulario</h1><Link to="/destino">Salir</Link>{dialog}</> }
 
 describe('useDirtyNavigationGuard', () => {
   beforeEach(() => {
@@ -16,11 +16,14 @@ describe('useDirtyNavigationGuard', () => {
     render(<RouterProvider router={router} />)
     await user.click(screen.getByRole('link', { name: 'Salir' }))
     const dialog = screen.getByRole('dialog')
-    expect(dialog).toHaveAttribute('open'); expect(screen.getByRole('button', { name: 'Keep editing' })).toHaveFocus()
-    await user.click(screen.getByRole('button', { name: 'Keep editing' }))
+    expect(dialog).toHaveAttribute('open'); expect(screen.getByRole('button', { name: 'Seguir editando' })).toHaveFocus()
+    expect(dialog).toHaveClass('unsaved-changes-dialog')
+    expect(screen.getByRole('button', { name: 'Seguir editando' })).toHaveClass('unsaved-changes-dialog__button--secondary')
+    expect(screen.getByRole('button', { name: 'Descartar cambios' })).toHaveClass('unsaved-changes-dialog__button--destructive')
+    await user.click(screen.getByRole('button', { name: 'Seguir editando' }))
     expect(screen.getByRole('heading', { name: 'Formulario' })).toBeInTheDocument()
     await user.click(screen.getByRole('link', { name: 'Salir' }))
-    await user.click(screen.getByRole('button', { name: 'Discard changes' }))
+    await user.click(screen.getByRole('button', { name: 'Descartar cambios' }))
     expect(await screen.findByRole('heading', { name: 'Destino' })).toBeInTheDocument()
   })
 })

@@ -26,10 +26,11 @@ type DataListPageProps<T extends { id: number }> = {
   onApplyFilters: (formData: FormData) => void
   onPageChange: (page: number) => void
   detailPath?: (item: T) => string
+  heroAction?: ReactNode
 }
 
 export function DataListPage<T extends { id: number }>(props: DataListPageProps<T>) {
-  const { eyebrow, title, description, items, meta, filters, params, columns, isLoading, isError, error, onRetry, onApplyFilters, onPageChange, detailPath } = props
+  const { eyebrow, title, description, items, meta, filters, params, columns, isLoading, isError, error, onRetry, onApplyFilters, onPageChange, detailPath, heroAction } = props
   const page = typeof params.page === 'number' ? params.page : 1
 
   function submit(event: FormEvent<HTMLFormElement>) {
@@ -45,7 +46,7 @@ export function DataListPage<T extends { id: number }>(props: DataListPageProps<
     <section className="home-feed data-list-page" aria-labelledby="data-list-title">
       <article className="home-card home-card--hero grupos-hero-card">
         <div><p className="shell-panel-caption">{eyebrow}</p><h1 id="data-list-title">{title}</h1><p>{description}</p></div>
-        <span className="dashboard-status-badge">{meta?.count ?? items.length} registros</span>
+        <div className="data-list-hero-actions"><span className="dashboard-status-badge">{meta?.count ?? items.length} registros</span>{heroAction}</div>
       </article>
       <form className="home-card grupos-filters data-list-filters" onSubmit={submit} aria-label={`Filtros de ${title.toLowerCase()}`}>
         {filters.map((filter) => (
