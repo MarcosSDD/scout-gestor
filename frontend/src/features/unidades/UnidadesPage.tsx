@@ -1,17 +1,69 @@
-import type { UnidadListItem, UnidadesQueryParams } from '../../api/unidadesApi'
-import { DataListPage, type ListColumn, type ListFilter } from '../data-list/DataListPage'
-import { useListSearchParams } from '../data-list/useListSearchParams'
-import { useUnidadesQuery } from './useUnidadesQuery'
-import { useAuth } from '../auth/useAuth'
-import { isAdminUser, isGrupoResponsable } from '../auth/rbac'
-import { CircularActionLink } from '../ui/CircularActionLink'
+import type {
+  UnidadListItem,
+  UnidadesQueryParams,
+} from "../../api/unidadesApi";
+import {
+  DataListPage,
+  type ListColumn,
+  type ListFilter,
+} from "../data-list/DataListPage";
+import { useListSearchParams } from "../data-list/useListSearchParams";
+import { useUnidadesQuery } from "./useUnidadesQuery";
+import { useAuth } from "../auth/useAuth";
+import { isAdminUser, isGrupoResponsable } from "../auth/rbac";
+import { CircularActionLink } from "../ui/CircularActionLink";
 
 export function UnidadesPage() {
-  const { user } = useAuth()
-  const list = useListSearchParams(['search', 'estado'])
-  const query = useUnidadesQuery(list.params as UnidadesQueryParams)
-  const filters: ListFilter[] = [{ name: 'search', label: 'Nombre de unidad', type: 'search', placeholder: 'Buscar por nombre' }, { name: 'estado', label: 'Estado', type: 'select', options: [{ value: 'ACTIVA', label: 'Activa' }, { value: 'INACTIVA', label: 'Inactiva' }] }]
-  const columns: ListColumn<UnidadListItem>[] = [{ label: 'Unidad', render: (item) => item.nombre }, { label: 'Grupo', render: (item) => item.grupo_nombre }, { label: 'Rama', render: (item) => item.rama_nombre }, { label: 'Estado', render: (item) => item.estado }, { label: 'Cupo', render: (item) => item.cupo_maximo ?? 'Sin limite' }]
-  const canCreateUnidad = isAdminUser(user) || isGrupoResponsable(user)
-  return <DataListPage eyebrow="Organizacion" title="Unidades" description="Unidades visibles para tu perfil y sus datos operativos de lectura." items={query.data?.data ?? []} meta={query.data?.meta} filters={filters} params={list.params} columns={columns} detailPath={(item) => `/app/unidades/${item.id}`} heroAction={canCreateUnidad ? <CircularActionLink to="/app/unidades/nueva" label="Nueva Unidad" /> : undefined} isLoading={query.isLoading} isError={query.isError} error={query.error as never} onRetry={() => void query.refetch()} onApplyFilters={list.applyFilters} onPageChange={list.goToPage} />
+  const { user } = useAuth();
+  const list = useListSearchParams(["search", "estado"]);
+  const query = useUnidadesQuery(list.params as UnidadesQueryParams);
+  const filters: ListFilter[] = [
+    {
+      name: "search",
+      label: "Nombre de unidad",
+      type: "search",
+      placeholder: "Buscar por nombre",
+    },
+    {
+      name: "estado",
+      label: "Estado",
+      type: "select",
+      options: [
+        { value: "ACTIVA", label: "Activa" },
+        { value: "INACTIVA", label: "Inactiva" },
+      ],
+    },
+  ];
+  const columns: ListColumn<UnidadListItem>[] = [
+    { label: "Unidad", render: (item) => item.nombre },
+    { label: "Grupo", render: (item) => item.grupo_nombre },
+    { label: "Rama", render: (item) => item.rama_nombre },
+    { label: "Estado", render: (item) => item.estado },
+    { label: "Cupo", render: (item) => item.cupo_maximo ?? "Sin limite" },
+  ];
+  const canCreateUnidad = isAdminUser(user) || isGrupoResponsable(user);
+  return (
+    <DataListPage
+      eyebrow="Organizacion"
+      title="Unidades"
+      description="Unidades visibles para tu perfil y sus datos operativos de lectura."
+      items={query.data?.data ?? []}
+      meta={query.data?.meta}
+      filters={filters}
+      params={list.params}
+      columns={columns}
+      detailPath={(item) => `/app/unidades/${item.id}`}
+      heroAction={
+        canCreateUnidad ? (
+          <CircularActionLink to="/app/unidades/nueva" label="Nueva Unidad" />
+        ) : undefined
+      }
+      isLoading={query.isLoading}
+      isError={query.isError}
+      error={query.error as never}
+      onRetry={() => void query.refetch()}
+      onApplyFilters={list.applyFilters}
+      onPageChange={list.goToPage}
+    />
+  );
 }

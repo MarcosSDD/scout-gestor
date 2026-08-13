@@ -1,17 +1,17 @@
-import { useQuery } from '@tanstack/react-query'
+import { useQuery } from "@tanstack/react-query";
 
-import { toApiError } from '../../api/errors'
-import { getGrupos } from '../../api/gruposApi'
+import { toApiError } from "../../api/errors";
+import { getGrupos } from "../../api/gruposApi";
 
 export function useAccessibleGruposQuery() {
   return useQuery({
-    queryKey: ['grupos', 'accessible'],
+    queryKey: ["grupos", "accessible"],
     queryFn: async () => {
       try {
-        return await getGrupos()
+        return await getGrupos();
       } catch (error) {
-        throw toApiError(error)
+        throw toApiError(error);
       }
     },
-  })
+  });
 }

@@ -1,7 +1,7 @@
-import { useHealthQuery } from './useHealthQuery'
+import { useHealthQuery } from "./useHealthQuery";
 
 export function HealthPage() {
-  const { data, isLoading, isError, error } = useHealthQuery()
+  const { data, isLoading, isError, error } = useHealthQuery();
 
   return (
     <main className="health-page">
@@ -13,7 +13,8 @@ export function HealthPage() {
 
         {isError && (
           <p role="alert" className="form-error">
-            {(error as { error?: { message?: string } })?.error?.message ?? 'No fue posible conectar con la API'}
+            {(error as { error?: { message?: string } })?.error?.message ??
+              "No fue posible conectar con la API"}
           </p>
         )}
 
@@ -24,5 +25,5 @@ export function HealthPage() {
         )}
       </section>
     </main>
-  )
+  );
 }

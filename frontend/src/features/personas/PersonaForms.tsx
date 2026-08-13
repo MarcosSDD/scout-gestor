@@ -1,68 +1,617 @@
-import { zodResolver } from '@hookform/resolvers/zod'
-import { useEffect, useState, type ReactNode } from 'react'
-import { useForm, useWatch } from 'react-hook-form'
-import { Link, useNavigate, useParams } from 'react-router-dom'
-import { toast } from 'react-toastify'
-import { toApiError } from '../../api/errors'
-import { FormActions } from '../forms/FormActions'
-import { applyDrfErrors } from '../forms/applyDrfErrors'
-import { FormErrorSummary } from '../forms/FormErrorSummary'
-import { FormField } from '../forms/FormField'
-import { FormFileInput } from '../forms/FormFileInput'
-import { FormSelect } from '../forms/FormSelect'
-import { useUnsavedChanges } from '../forms/useUnsavedChanges'
-import { useAuth } from '../auth/useAuth'
-import { asignacionSchema, beneficiarioSchema, certificadoSchema, personaSchema, type AsignacionFormValues, type BeneficiarioFormValues, type CertificadoFormValues, type PersonaFormValues } from './personasSchemas'
-import { useAdultoDetailQuery, useBeneficiarioDetailQuery, usePersonaDetailQuery } from './usePersonasQueries'
-import { useAsignacionMutation, useBeneficiarioMutation, useCertificadoMutation, usePersonaMutation, useRamasQuery, useUnidadesSeleccionQuery } from './usePersonasMutations'
+import { zodResolver } from "@hookform/resolvers/zod";
+import { useEffect, useState, type ReactNode } from "react";
+import { useForm, useWatch } from "react-hook-form";
+import { Link, useNavigate, useParams } from "react-router-dom";
+import { toast } from "react-toastify";
+import { toApiError } from "../../api/errors";
+import { FormActions } from "../forms/FormActions";
+import { applyDrfErrors } from "../forms/applyDrfErrors";
+import { FormErrorSummary } from "../forms/FormErrorSummary";
+import { FormField } from "../forms/FormField";
+import { FormFileInput } from "../forms/FormFileInput";
+import { FormSelect } from "../forms/FormSelect";
+import { useUnsavedChanges } from "../forms/useUnsavedChanges";
+import { useAuth } from "../auth/useAuth";
+import {
+  asignacionSchema,
+  beneficiarioSchema,
+  certificadoSchema,
+  personaSchema,
+  type AsignacionFormValues,
+  type BeneficiarioFormValues,
+  type CertificadoFormValues,
+  type PersonaFormValues,
+} from "./personasSchemas";
+import {
+  useAdultoDetailQuery,
+  useBeneficiarioDetailQuery,
+  usePersonaDetailQuery,
+} from "./usePersonasQueries";
+import {
+  useAsignacionMutation,
+  useBeneficiarioMutation,
+  useCertificadoMutation,
+  usePersonaMutation,
+  useRamasQuery,
+  useUnidadesSeleccionQuery,
+} from "./usePersonasMutations";
 
-const idFromParam = (value?: string) => Number.isInteger(Number(value)) && Number(value) > 0 ? Number(value) : 0
-const errorsForSummary = (errors: Record<string, { message?: string }>, global: string[]) => [...Object.entries(errors).map(([name, error]) => ({ name, message: error.message })), ...global.map((message) => ({ message }))]
-function FormPage({ title, children, returnTo = '..' }: { title: string; children: ReactNode; returnTo?: string }) { return <section className="home-feed form-page" aria-labelledby="form-title"><Link className="grupos-back-link" to={returnTo}>Volver</Link><article className="home-card"><h1 id="form-title">{title}</h1>{children}</article></section> }
-function QueryFormState({ title, isLoading, error, returnTo = '..' }: { title: string; isLoading: boolean; error: unknown; returnTo?: string }) {
-  if (isLoading) return <FormPage title={title} returnTo={returnTo}><p role="status">Cargando ficha…</p></FormPage>
-  if (!error) return null
-  const apiError = toApiError(error); const status = apiError.error.status
-  const message = status === 403 ? 'El backend no permite editar esta ficha.' : status === 404 ? 'La ficha no existe o ya no está disponible.' : apiError.error.message
-  return <FormPage title={title} returnTo={returnTo}><p role="alert">{message}</p></FormPage>
+const idFromParam = (value?: string) =>
+  Number.isInteger(Number(value)) && Number(value) > 0 ? Number(value) : 0;
+const errorsForSummary = (
+  errors: Record<string, { message?: string }>,
+  global: string[],
+) => [
+  ...Object.entries(errors).map(([name, error]) => ({
+    name,
+    message: error.message,
+  })),
+  ...global.map((message) => ({ message })),
+];
+function FormPage({
+  title,
+  children,
+  returnTo = "..",
+}: {
+  title: string;
+  children: ReactNode;
+  returnTo?: string;
+}) {
+  return (
+    <section className="home-feed form-page" aria-labelledby="form-title">
+      <Link className="grupos-back-link" to={returnTo}>
+        Volver
+      </Link>
+      <article className="home-card">
+        <h1 id="form-title">{title}</h1>
+        {children}
+      </article>
+    </section>
+  );
+}
+function QueryFormState({
+  title,
+  isLoading,
+  error,
+  returnTo = "..",
+}: {
+  title: string;
+  isLoading: boolean;
+  error: unknown;
+  returnTo?: string;
+}) {
+  if (isLoading)
+    return (
+      <FormPage title={title} returnTo={returnTo}>
+        <p role="status">Cargando ficha…</p>
+      </FormPage>
+    );
+  if (!error) return null;
+  const apiError = toApiError(error);
+  const status = apiError.error.status;
+  const message =
+    status === 403
+      ? "El backend no permite editar esta ficha."
+      : status === 404
+        ? "La ficha no existe o ya no está disponible."
+        : apiError.error.message;
+  return (
+    <FormPage title={title} returnTo={returnTo}>
+      <p role="alert">{message}</p>
+    </FormPage>
+  );
 }
 
 export function PersonaFormPage() {
-  const routePersonaId = idFromParam(useParams().personaId); const { user } = useAuth(); const personaId = routePersonaId || user?.persona_id || 0; const isOwnProfile = !routePersonaId; const returnTo = isOwnProfile ? '/app/perfil' : '..'; const query = usePersonaDetailQuery(personaId); const mutation = usePersonaMutation(personaId); const navigate = useNavigate(); const [preview, setPreview] = useState<string | null>(null); const [globalErrors, setGlobalErrors] = useState<string[]>([])
-  const form = useForm<PersonaFormValues>({ resolver: zodResolver(personaSchema), defaultValues: { nombres: '', apellidos: '', fecha_nacimiento: '', sexo: '', direccion: '', telefono: '', email: '', estado: 'ACTIVO' } })
-  const persona = query.data?.data; const permissions = query.data?.meta?.permissions; const canIdentity = Boolean(permissions?.can_edit_identity); const canContact = Boolean(permissions?.can_edit_contact); const canPhoto = Boolean(permissions?.can_replace_photo)
-  useEffect(() => { if (!persona) return; form.reset({ nombres: persona.nombres ?? '', apellidos: persona.apellidos ?? '', fecha_nacimiento: persona.fecha_nacimiento ?? '', sexo: persona.sexo ?? '', direccion: persona.direccion ?? '', telefono: persona.telefono ?? '', email: persona.email ?? '', estado: persona.estado === 'INACTIVO' ? 'INACTIVO' : 'ACTIVO', foto: undefined }) }, [form, persona])
-  useEffect(() => () => { if (preview) URL.revokeObjectURL(preview) }, [preview]); useUnsavedChanges(form.formState.isDirty)
-  if (!personaId) return <FormPage title="Editar persona" returnTo={returnTo}><p role="alert">Tu cuenta no tiene una persona asociada.</p></FormPage>
-  if (query.isLoading || query.isError) return <QueryFormState title="Editar persona" returnTo={returnTo} isLoading={query.isLoading} error={query.isError ? query.error : null} />
-  if (!persona) return <FormPage title="Editar persona" returnTo={returnTo}><p role="alert">La ficha no está disponible.</p></FormPage>
-  const errors = form.formState.errors
+  const routePersonaId = idFromParam(useParams().personaId);
+  const { user } = useAuth();
+  const personaId = routePersonaId || user?.persona_id || 0;
+  const isOwnProfile = !routePersonaId;
+  const returnTo = isOwnProfile ? "/app/perfil" : "..";
+  const query = usePersonaDetailQuery(personaId);
+  const mutation = usePersonaMutation(personaId);
+  const navigate = useNavigate();
+  const [preview, setPreview] = useState<string | null>(null);
+  const [globalErrors, setGlobalErrors] = useState<string[]>([]);
+  const form = useForm<PersonaFormValues>({
+    resolver: zodResolver(personaSchema),
+    defaultValues: {
+      nombres: "",
+      apellidos: "",
+      fecha_nacimiento: "",
+      sexo: "",
+      direccion: "",
+      telefono: "",
+      email: "",
+      estado: "ACTIVO",
+    },
+  });
+  const persona = query.data?.data;
+  const permissions = query.data?.meta?.permissions;
+  const canIdentity = Boolean(permissions?.can_edit_identity);
+  const canContact = Boolean(permissions?.can_edit_contact);
+  const canPhoto = Boolean(permissions?.can_replace_photo);
+  useEffect(() => {
+    if (!persona) return;
+    form.reset({
+      nombres: persona.nombres ?? "",
+      apellidos: persona.apellidos ?? "",
+      fecha_nacimiento: persona.fecha_nacimiento ?? "",
+      sexo: persona.sexo ?? "",
+      direccion: persona.direccion ?? "",
+      telefono: persona.telefono ?? "",
+      email: persona.email ?? "",
+      estado: persona.estado === "INACTIVO" ? "INACTIVO" : "ACTIVO",
+      foto: undefined,
+    });
+  }, [form, persona]);
+  useEffect(
+    () => () => {
+      if (preview) URL.revokeObjectURL(preview);
+    },
+    [preview],
+  );
+  useUnsavedChanges(form.formState.isDirty);
+  if (!personaId)
+    return (
+      <FormPage title="Editar persona" returnTo={returnTo}>
+        <p role="alert">Tu cuenta no tiene una persona asociada.</p>
+      </FormPage>
+    );
+  if (query.isLoading || query.isError)
+    return (
+      <QueryFormState
+        title="Editar persona"
+        returnTo={returnTo}
+        isLoading={query.isLoading}
+        error={query.isError ? query.error : null}
+      />
+    );
+  if (!persona)
+    return (
+      <FormPage title="Editar persona" returnTo={returnTo}>
+        <p role="alert">La ficha no está disponible.</p>
+      </FormPage>
+    );
+  const errors = form.formState.errors;
   async function submit(values: PersonaFormValues) {
-    const payload = { ...(canIdentity ? { nombres: values.nombres, apellidos: values.apellidos, fecha_nacimiento: values.fecha_nacimiento, sexo: values.sexo, estado: values.estado } : {}), ...(canContact ? { direccion: values.direccion, telefono: values.telefono, email: values.email } : {}), ...(canPhoto && values.foto instanceof File ? { foto: values.foto } : {}) }
-    try { await mutation.mutateAsync(payload); toast.success('Persona actualizada.'); navigate(returnTo) } catch (error) { const apiError = toApiError(error); setGlobalErrors(applyDrfErrors(apiError.error.details, form.setError, ['nombres', 'apellidos', 'fecha_nacimiento', 'sexo', 'estado', 'direccion', 'telefono', 'email', 'foto'])) }
+    const payload = {
+      ...(canIdentity
+        ? {
+            nombres: values.nombres,
+            apellidos: values.apellidos,
+            fecha_nacimiento: values.fecha_nacimiento,
+            sexo: values.sexo,
+            estado: values.estado,
+          }
+        : {}),
+      ...(canContact
+        ? {
+            direccion: values.direccion,
+            telefono: values.telefono,
+            email: values.email,
+          }
+        : {}),
+      ...(canPhoto && values.foto instanceof File ? { foto: values.foto } : {}),
+    };
+    try {
+      await mutation.mutateAsync(payload);
+      toast.success("Persona actualizada.");
+      navigate(returnTo);
+    } catch (error) {
+      const apiError = toApiError(error);
+      setGlobalErrors(
+        applyDrfErrors(apiError.error.details, form.setError, [
+          "nombres",
+          "apellidos",
+          "fecha_nacimiento",
+          "sexo",
+          "estado",
+          "direccion",
+          "telefono",
+          "email",
+          "foto",
+        ]),
+      );
+    }
   }
-  return <FormPage title="Editar persona" returnTo={returnTo}><form className="domain-form" noValidate onSubmit={form.handleSubmit(submit)}><FormErrorSummary errors={errorsForSummary(errors, globalErrors)} /><div className="form-grid">{canIdentity ? <><FormField label="Nombres" {...form.register('nombres')} error={errors.nombres?.message} /><FormField label="Apellidos" {...form.register('apellidos')} error={errors.apellidos?.message} /><FormField label="Fecha de nacimiento" type="date" {...form.register('fecha_nacimiento')} error={errors.fecha_nacimiento?.message} /><FormSelect label="Estado" options={[{ value: 'ACTIVO', label: 'Activo' }, { value: 'INACTIVO', label: 'Inactivo' }]} {...form.register('estado')} error={errors.estado?.message} /></> : null}{canContact ? <><FormField label="Correo" type="email" {...form.register('email')} error={errors.email?.message} /><FormField label="Teléfono" type="tel" {...form.register('telefono')} error={errors.telefono?.message} /><FormField label="Dirección" {...form.register('direccion')} error={errors.direccion?.message} /></> : null}{canPhoto ? <FormFileInput label="Foto" name="foto" accept="image/jpeg,image/png,image/webp" hint="JPG, PNG o WebP; máximo 2 MB." onChange={(event) => { const file = event.currentTarget.files?.[0]; form.setValue('foto', file, { shouldDirty: true, shouldValidate: true }); setPreview((current) => { if (current) URL.revokeObjectURL(current); return file ? URL.createObjectURL(file) : null }) }} error={errors.foto?.message} /> : null}</div>{preview ? <img className="photo-preview" src={preview} alt="Vista previa de la foto seleccionada" /> : null}<FormActions isSubmitting={mutation.isPending} submitLabel="Guardar cambios"><Link className="secondary-link" to={returnTo}>Cancelar</Link></FormActions></form></FormPage>
+  return (
+    <FormPage title="Editar persona" returnTo={returnTo}>
+      <form
+        className="domain-form"
+        noValidate
+        onSubmit={form.handleSubmit(submit)}
+      >
+        <FormErrorSummary errors={errorsForSummary(errors, globalErrors)} />
+        <div className="form-grid">
+          {canIdentity ? (
+            <>
+              <FormField
+                label="Nombres"
+                {...form.register("nombres")}
+                error={errors.nombres?.message}
+              />
+              <FormField
+                label="Apellidos"
+                {...form.register("apellidos")}
+                error={errors.apellidos?.message}
+              />
+              <FormField
+                label="Fecha de nacimiento"
+                type="date"
+                {...form.register("fecha_nacimiento")}
+                error={errors.fecha_nacimiento?.message}
+              />
+              <FormSelect
+                label="Estado"
+                options={[
+                  { value: "ACTIVO", label: "Activo" },
+                  { value: "INACTIVO", label: "Inactivo" },
+                ]}
+                {...form.register("estado")}
+                error={errors.estado?.message}
+              />
+            </>
+          ) : null}
+          {canContact ? (
+            <>
+              <FormField
+                label="Correo"
+                type="email"
+                {...form.register("email")}
+                error={errors.email?.message}
+              />
+              <FormField
+                label="Teléfono"
+                type="tel"
+                {...form.register("telefono")}
+                error={errors.telefono?.message}
+              />
+              <FormField
+                label="Dirección"
+                {...form.register("direccion")}
+                error={errors.direccion?.message}
+              />
+            </>
+          ) : null}
+          {canPhoto ? (
+            <FormFileInput
+              label="Foto"
+              name="foto"
+              accept="image/jpeg,image/png,image/webp"
+              hint="JPG, PNG o WebP; máximo 2 MB."
+              onChange={(event) => {
+                const file = event.currentTarget.files?.[0];
+                form.setValue("foto", file, {
+                  shouldDirty: true,
+                  shouldValidate: true,
+                });
+                setPreview((current) => {
+                  if (current) URL.revokeObjectURL(current);
+                  return file ? URL.createObjectURL(file) : null;
+                });
+              }}
+              error={errors.foto?.message}
+            />
+          ) : null}
+        </div>
+        {preview ? (
+          <img
+            className="photo-preview"
+            src={preview}
+            alt="Vista previa de la foto seleccionada"
+          />
+        ) : null}
+        <FormActions
+          isSubmitting={mutation.isPending}
+          submitLabel="Guardar cambios"
+        >
+          <Link className="secondary-link" to={returnTo}>
+            Cancelar
+          </Link>
+        </FormActions>
+      </form>
+    </FormPage>
+  );
 }
 
 export function BeneficiarioFormPage() {
-  const id = idFromParam(useParams().beneficiarioId); const query = useBeneficiarioDetailQuery(id); const mutation = useBeneficiarioMutation(id); const navigate = useNavigate(); const [globalErrors, setGlobalErrors] = useState<string[]>([])
-  const form = useForm<BeneficiarioFormValues>({ resolver: zodResolver(beneficiarioSchema), defaultValues: { fecha_ingreso: '' } }); useEffect(() => { if (query.data?.data) form.reset({ fecha_ingreso: query.data.data.fecha_ingreso ?? '' }) }, [form, query.data]); useUnsavedChanges(form.formState.isDirty)
-  if (query.isLoading || query.isError) return <QueryFormState title="Editar beneficiario" isLoading={query.isLoading} error={query.isError ? query.error : null} />
-  if (!query.data?.data || !query.data.meta?.permissions?.can_edit) return <FormPage title="Editar beneficiario"><p role="alert">El backend no permite editar esta ficha.</p></FormPage>
-  return <FormPage title="Editar beneficiario"><form className="domain-form" noValidate onSubmit={form.handleSubmit(async (values) => { try { await mutation.mutateAsync(values); toast.success('Beneficiario actualizado.'); navigate('..') } catch (error) { const apiError = toApiError(error); setGlobalErrors(applyDrfErrors(apiError.error.details, form.setError, ['fecha_ingreso'])) } })}><FormErrorSummary errors={errorsForSummary(form.formState.errors, globalErrors)} /><FormField label="Fecha de ingreso" type="date" {...form.register('fecha_ingreso')} error={form.formState.errors.fecha_ingreso?.message} /><FormActions isSubmitting={mutation.isPending} submitLabel="Guardar cambios" /></form></FormPage>
+  const id = idFromParam(useParams().beneficiarioId);
+  const query = useBeneficiarioDetailQuery(id);
+  const mutation = useBeneficiarioMutation(id);
+  const navigate = useNavigate();
+  const [globalErrors, setGlobalErrors] = useState<string[]>([]);
+  const form = useForm<BeneficiarioFormValues>({
+    resolver: zodResolver(beneficiarioSchema),
+    defaultValues: { fecha_ingreso: "" },
+  });
+  useEffect(() => {
+    if (query.data?.data)
+      form.reset({ fecha_ingreso: query.data.data.fecha_ingreso ?? "" });
+  }, [form, query.data]);
+  useUnsavedChanges(form.formState.isDirty);
+  if (query.isLoading || query.isError)
+    return (
+      <QueryFormState
+        title="Editar beneficiario"
+        isLoading={query.isLoading}
+        error={query.isError ? query.error : null}
+      />
+    );
+  if (!query.data?.data || !query.data.meta?.permissions?.can_edit)
+    return (
+      <FormPage title="Editar beneficiario">
+        <p role="alert">El backend no permite editar esta ficha.</p>
+      </FormPage>
+    );
+  return (
+    <FormPage title="Editar beneficiario">
+      <form
+        className="domain-form"
+        noValidate
+        onSubmit={form.handleSubmit(async (values) => {
+          try {
+            await mutation.mutateAsync(values);
+            toast.success("Beneficiario actualizado.");
+            navigate("..");
+          } catch (error) {
+            const apiError = toApiError(error);
+            setGlobalErrors(
+              applyDrfErrors(apiError.error.details, form.setError, [
+                "fecha_ingreso",
+              ]),
+            );
+          }
+        })}
+      >
+        <FormErrorSummary
+          errors={errorsForSummary(form.formState.errors, globalErrors)}
+        />
+        <FormField
+          label="Fecha de ingreso"
+          type="date"
+          {...form.register("fecha_ingreso")}
+          error={form.formState.errors.fecha_ingreso?.message}
+        />
+        <FormActions
+          isSubmitting={mutation.isPending}
+          submitLabel="Guardar cambios"
+        />
+      </form>
+    </FormPage>
+  );
 }
 
 export function AsignacionFormPage() {
-  const id = idFromParam(useParams().beneficiarioId); const beneficiary = useBeneficiarioDetailQuery(id); const mutation = useAsignacionMutation(id); const navigate = useNavigate(); const ramas = useRamasQuery(); const [page, setPage] = useState(1); const form = useForm<AsignacionFormValues>({ resolver: zodResolver(asignacionSchema), defaultValues: { rama_actual: 0, unidad: 0 } }); const ramaId = useWatch({ control: form.control, name: 'rama_actual' }) || undefined; const unidades = useUnidadesSeleccionQuery(ramaId, page); const [globalErrors, setGlobalErrors] = useState<string[]>([]); const ramaField = form.register('rama_actual', { valueAsNumber: true }); useUnsavedChanges(form.formState.isDirty)
-  if (beneficiary.isLoading || beneficiary.isError) return <QueryFormState title="Asignar a unidad" isLoading={beneficiary.isLoading} error={beneficiary.isError ? beneficiary.error : null} />
-  if (!beneficiary.data?.data || !beneficiary.data.meta?.permissions?.can_reassign_unit) return <FormPage title="Asignar a unidad"><p role="alert">El backend no permite reasignar esta ficha.</p></FormPage>
-  const unidadOptions = (unidades.data?.data ?? []).map((item) => ({ value: String(item.id), label: item.nombre }))
-  return <FormPage title="Asignar a unidad"><form className="domain-form" noValidate onSubmit={form.handleSubmit(async (values) => { try { await mutation.mutateAsync(values); toast.success('Asignación actualizada.'); navigate('..') } catch (error) { const apiError = toApiError(error); setGlobalErrors(applyDrfErrors(apiError.error.details, form.setError, ['rama_actual', 'unidad'])) } })}><FormErrorSummary errors={errorsForSummary(form.formState.errors, globalErrors)} /><fieldset><legend>Ubicación scout</legend><div className="form-grid"><FormSelect label="Rama" options={[{ value: '', label: ramas.isLoading ? 'Cargando ramas…' : 'Selecciona una rama' }, ...(ramas.data?.data ?? []).map((item) => ({ value: String(item.id), label: item.nombre }))]} {...ramaField} onChange={(event) => { ramaField.onChange(event); setPage(1); form.setValue('unidad', 0) }} error={form.formState.errors.rama_actual?.message} /><FormSelect label="Unidad" disabled={!ramaId || unidades.isLoading} options={[{ value: '', label: !ramaId ? 'Primero selecciona una rama' : unidades.isLoading ? 'Buscando unidades…' : unidadOptions.length ? 'Selecciona una unidad' : 'No hay unidades activas elegibles en esta página' }, ...unidadOptions]} {...form.register('unidad', { valueAsNumber: true })} error={form.formState.errors.unidad?.message} /></div>{ramaId && !unidades.isLoading ? <div className="assignment-pagination"><span>{unidades.data?.meta?.count === 0 ? 'No hay unidades activas elegibles.' : `Mostrando página ${page} de unidades elegibles.`}</span><button type="button" disabled={!unidades.data?.meta?.previous} onClick={() => setPage((value) => Math.max(1, value - 1))}>Anterior</button><button type="button" disabled={!unidades.data?.meta?.next} onClick={() => setPage((value) => value + 1)}>Más unidades</button></div> : null}</fieldset><FormActions isSubmitting={mutation.isPending} submitLabel="Guardar asignación" /></form></FormPage>
+  const id = idFromParam(useParams().beneficiarioId);
+  const beneficiary = useBeneficiarioDetailQuery(id);
+  const mutation = useAsignacionMutation(id);
+  const navigate = useNavigate();
+  const ramas = useRamasQuery();
+  const [page, setPage] = useState(1);
+  const form = useForm<AsignacionFormValues>({
+    resolver: zodResolver(asignacionSchema),
+    defaultValues: { rama_actual: 0, unidad: 0 },
+  });
+  const ramaId =
+    useWatch({ control: form.control, name: "rama_actual" }) || undefined;
+  const unidades = useUnidadesSeleccionQuery(ramaId, page);
+  const [globalErrors, setGlobalErrors] = useState<string[]>([]);
+  const ramaField = form.register("rama_actual", { valueAsNumber: true });
+  useUnsavedChanges(form.formState.isDirty);
+  if (beneficiary.isLoading || beneficiary.isError)
+    return (
+      <QueryFormState
+        title="Asignar a unidad"
+        isLoading={beneficiary.isLoading}
+        error={beneficiary.isError ? beneficiary.error : null}
+      />
+    );
+  if (
+    !beneficiary.data?.data ||
+    !beneficiary.data.meta?.permissions?.can_reassign_unit
+  )
+    return (
+      <FormPage title="Asignar a unidad">
+        <p role="alert">El backend no permite reasignar esta ficha.</p>
+      </FormPage>
+    );
+  const unidadOptions = (unidades.data?.data ?? []).map((item) => ({
+    value: String(item.id),
+    label: item.nombre,
+  }));
+  return (
+    <FormPage title="Asignar a unidad">
+      <form
+        className="domain-form"
+        noValidate
+        onSubmit={form.handleSubmit(async (values) => {
+          try {
+            await mutation.mutateAsync(values);
+            toast.success("Asignación actualizada.");
+            navigate("..");
+          } catch (error) {
+            const apiError = toApiError(error);
+            setGlobalErrors(
+              applyDrfErrors(apiError.error.details, form.setError, [
+                "rama_actual",
+                "unidad",
+              ]),
+            );
+          }
+        })}
+      >
+        <FormErrorSummary
+          errors={errorsForSummary(form.formState.errors, globalErrors)}
+        />
+        <fieldset>
+          <legend>Ubicación scout</legend>
+          <div className="form-grid">
+            <FormSelect
+              label="Rama"
+              options={[
+                {
+                  value: "",
+                  label: ramas.isLoading
+                    ? "Cargando ramas…"
+                    : "Selecciona una rama",
+                },
+                ...(ramas.data?.data ?? []).map((item) => ({
+                  value: String(item.id),
+                  label: item.nombre,
+                })),
+              ]}
+              {...ramaField}
+              onChange={(event) => {
+                ramaField.onChange(event);
+                setPage(1);
+                form.setValue("unidad", 0);
+              }}
+              error={form.formState.errors.rama_actual?.message}
+            />
+            <FormSelect
+              label="Unidad"
+              disabled={!ramaId || unidades.isLoading}
+              options={[
+                {
+                  value: "",
+                  label: !ramaId
+                    ? "Primero selecciona una rama"
+                    : unidades.isLoading
+                      ? "Buscando unidades…"
+                      : unidadOptions.length
+                        ? "Selecciona una unidad"
+                        : "No hay unidades activas elegibles en esta página",
+                },
+                ...unidadOptions,
+              ]}
+              {...form.register("unidad", { valueAsNumber: true })}
+              error={form.formState.errors.unidad?.message}
+            />
+          </div>
+          {ramaId && !unidades.isLoading ? (
+            <div className="assignment-pagination">
+              <span>
+                {unidades.data?.meta?.count === 0
+                  ? "No hay unidades activas elegibles."
+                  : `Mostrando página ${page} de unidades elegibles.`}
+              </span>
+              <button
+                type="button"
+                disabled={!unidades.data?.meta?.previous}
+                onClick={() => setPage((value) => Math.max(1, value - 1))}
+              >
+                Anterior
+              </button>
+              <button
+                type="button"
+                disabled={!unidades.data?.meta?.next}
+                onClick={() => setPage((value) => value + 1)}
+              >
+                Más unidades
+              </button>
+            </div>
+          ) : null}
+        </fieldset>
+        <FormActions
+          isSubmitting={mutation.isPending}
+          submitLabel="Guardar asignación"
+        />
+      </form>
+    </FormPage>
+  );
 }
 
 export function CertificadoFormPage() {
-  const id = idFromParam(useParams().adultoId); const query = useAdultoDetailQuery(id); const mutation = useCertificadoMutation(id); const navigate = useNavigate(); const [globalErrors, setGlobalErrors] = useState<string[]>([]); const form = useForm<CertificadoFormValues>({ resolver: zodResolver(certificadoSchema), defaultValues: { certificado_vigencia_hasta: '', certificado_inhabilidades: undefined as never } }); useEffect(() => { if (query.data?.data) form.reset({ certificado_vigencia_hasta: query.data.data.certificado_vigencia_hasta ?? '', certificado_inhabilidades: undefined as never }) }, [form, query.data]); useUnsavedChanges(form.formState.isDirty)
-  if (query.isLoading || query.isError) return <QueryFormState title="Renovar certificado de inhabilidades" isLoading={query.isLoading} error={query.isError ? query.error : null} />
-  if (!query.data?.data || !query.data.meta?.permissions?.can_renew_certificate) return <FormPage title="Renovar certificado de inhabilidades"><p role="alert">El backend no permite renovar este certificado.</p></FormPage>
-  return <FormPage title="Renovar certificado de inhabilidades"><form className="domain-form" noValidate onSubmit={form.handleSubmit(async (values) => { try { await mutation.mutateAsync(values); toast.success('Certificado actualizado.'); navigate('..') } catch (error) { const apiError = toApiError(error); setGlobalErrors(applyDrfErrors(apiError.error.details, form.setError, ['certificado_vigencia_hasta', 'certificado_inhabilidades'])) } })}><FormErrorSummary errors={errorsForSummary(form.formState.errors, globalErrors)} /><fieldset><legend>Documento y vigencia</legend><div className="form-grid"><FormField label="Vigente hasta" type="date" {...form.register('certificado_vigencia_hasta')} error={form.formState.errors.certificado_vigencia_hasta?.message} /><FormFileInput label="Certificado PDF" name="certificado_inhabilidades" accept="application/pdf" hint="PDF de hasta 5 MB." onChange={(event) => form.setValue('certificado_inhabilidades', event.currentTarget.files?.[0] as never, { shouldDirty: true, shouldValidate: true })} error={form.formState.errors.certificado_inhabilidades?.message} /></div></fieldset><FormActions isSubmitting={mutation.isPending} submitLabel="Renovar certificado" /></form></FormPage>
+  const id = idFromParam(useParams().adultoId);
+  const query = useAdultoDetailQuery(id);
+  const mutation = useCertificadoMutation(id);
+  const navigate = useNavigate();
+  const [globalErrors, setGlobalErrors] = useState<string[]>([]);
+  const form = useForm<CertificadoFormValues>({
+    resolver: zodResolver(certificadoSchema),
+    defaultValues: {
+      certificado_vigencia_hasta: "",
+      certificado_inhabilidades: undefined as never,
+    },
+  });
+  useEffect(() => {
+    if (query.data?.data)
+      form.reset({
+        certificado_vigencia_hasta:
+          query.data.data.certificado_vigencia_hasta ?? "",
+        certificado_inhabilidades: undefined as never,
+      });
+  }, [form, query.data]);
+  useUnsavedChanges(form.formState.isDirty);
+  if (query.isLoading || query.isError)
+    return (
+      <QueryFormState
+        title="Renovar certificado de inhabilidades"
+        isLoading={query.isLoading}
+        error={query.isError ? query.error : null}
+      />
+    );
+  if (!query.data?.data || !query.data.meta?.permissions?.can_renew_certificate)
+    return (
+      <FormPage title="Renovar certificado de inhabilidades">
+        <p role="alert">El backend no permite renovar este certificado.</p>
+      </FormPage>
+    );
+  return (
+    <FormPage title="Renovar certificado de inhabilidades">
+      <form
+        className="domain-form"
+        noValidate
+        onSubmit={form.handleSubmit(async (values) => {
+          try {
+            await mutation.mutateAsync(values);
+            toast.success("Certificado actualizado.");
+            navigate("..");
+          } catch (error) {
+            const apiError = toApiError(error);
+            setGlobalErrors(
+              applyDrfErrors(apiError.error.details, form.setError, [
+                "certificado_vigencia_hasta",
+                "certificado_inhabilidades",
+              ]),
+            );
+          }
+        })}
+      >
+        <FormErrorSummary
+          errors={errorsForSummary(form.formState.errors, globalErrors)}
+        />
+        <fieldset>
+          <legend>Documento y vigencia</legend>
+          <div className="form-grid">
+            <FormField
+              label="Vigente hasta"
+              type="date"
+              {...form.register("certificado_vigencia_hasta")}
+              error={form.formState.errors.certificado_vigencia_hasta?.message}
+            />
+            <FormFileInput
+              label="Certificado PDF"
+              name="certificado_inhabilidades"
+              accept="application/pdf"
+              hint="PDF de hasta 5 MB."
+              onChange={(event) =>
+                form.setValue(
+                  "certificado_inhabilidades",
+                  event.currentTarget.files?.[0] as never,
+                  { shouldDirty: true, shouldValidate: true },
+                )
+              }
+              error={form.formState.errors.certificado_inhabilidades?.message}
+            />
+          </div>
+        </fieldset>
+        <FormActions
+          isSubmitting={mutation.isPending}
+          submitLabel="Renovar certificado"
+        />
+      </form>
+    </FormPage>
+  );
 }

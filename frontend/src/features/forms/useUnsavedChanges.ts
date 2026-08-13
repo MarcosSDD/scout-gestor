@@ -1,5 +1,5 @@
-import { useDirtyNavigationGuard } from './useDirtyNavigationGuard'
+import { useDirtyNavigationGuard } from "./useDirtyNavigationGuard";
 
 export function useUnsavedChanges(isDirty: boolean) {
-  return useDirtyNavigationGuard(isDirty)
+  return useDirtyNavigationGuard(isDirty);
 }
