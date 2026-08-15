@@ -1485,6 +1485,7 @@ a {
   gap: 8px;
   overflow-x: auto;
   padding: 5px 5px;
+  margin: 0 -5px 12px;
 }
 
 .persona-subnav a {
@@ -1589,7 +1590,7 @@ a {
 .form-checkbox-group label { display: flex; align-items: center; gap: 8px; }
 .form-checkbox-group input { width: 18px; height: 18px; accent-color: var(--color-primary-dark); }
 .photo-preview { width: 128px; height: 128px; border-radius: 20px; object-fit: cover; }
-.detail-actions { display: flex; flex-wrap: wrap; gap: 10px; }
+.detail-actions { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 20px; }
 .detail-actions .secondary-link, .page-heading .secondary-link { margin-top: 0; min-height: 42px; padding: 0 16px; }
 .page-heading { display: flex; align-items: start; justify-content: space-between; gap: 16px; }
 .progress-list { display: grid; gap: 12px; margin: 20px 0 0; padding: 0; list-style: none; }

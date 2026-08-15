@@ -8,9 +8,11 @@ type AppHeaderProps = {
   user: AuthUser | null;
   onMenuClick: () => void;
   isMenuOpen: boolean;
+  onSearchClick: () => void;
+  onRightPanelClick: () => void;
 };
 
-export function AppHeader({ user, onMenuClick, isMenuOpen }: AppHeaderProps) {
+export function AppHeader({ user, onMenuClick, isMenuOpen, onSearchClick, onRightPanelClick }: AppHeaderProps) {
   const initials = user?.username.slice(0, 2).toUpperCase() ?? "WL";
   const quickLinks = getVisibleNavItems(user).filter(
     (item) => item.showInHeader,
@@ -27,6 +29,13 @@ export function AppHeader({ user, onMenuClick, isMenuOpen }: AppHeaderProps) {
           <span>We Lemu</span>
         </Link>
 
+        <button className="shell-mobile-icon shell-mobile-icon--spacer" type="button" onClick={onRightPanelClick} aria-label="Abrir actividad">
+          <Icon name="message" />
+        </button>
+        <button className="shell-mobile-icon" type="button" onClick={onSearchClick} aria-label="Abrir busqueda">
+          <Icon name="search" />
+        </button>
+
         <button
           className="shell-menu-button"
           type="button"
@@ -38,6 +47,11 @@ export function AppHeader({ user, onMenuClick, isMenuOpen }: AppHeaderProps) {
           <Icon name="menu" />
         </button>
       </div>
+
+      <form className="shell-search" role="search">
+        <Icon name="search" />
+        <input type="search" placeholder="Buscar en We Lemu..." aria-label="Buscar" />
+      </form>
 
       <nav className="shell-header__center" aria-label="Accesos rapidos">
         {quickLinks.map((link) => (
@@ -56,6 +70,9 @@ export function AppHeader({ user, onMenuClick, isMenuOpen }: AppHeaderProps) {
       </nav>
 
       <div className="shell-header__actions" aria-label="Acciones de usuario">
+        <button className="shell-action-icon" type="button" aria-label="Notificaciones"><span className="dot-count" /><Icon name="bell" /></button>
+        <button className="shell-action-icon" type="button" aria-label="Mensajes" onClick={onRightPanelClick}><Icon name="message" /></button>
+        <button className="shell-action-icon" type="button" aria-label="Configuracion"><Icon name="settings" /></button>
         <Link
           className="shell-avatar"
           to={profileLink?.to ?? "/app"}

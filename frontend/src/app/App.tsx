@@ -85,8 +85,9 @@ type AppPageProps = {
 
 function AppPage({ navItemId, children }: AppPageProps) {
   const { user } = useAuth();
+  // Verifica si el usuario tiene acceso al navItemId especificado
   const navItem = getNavItemById(navItemId);
-
+  // Si no tiene acceso, redirige a la página de Forbidden
   if (!navItem || !canSeeNavItem(user, navItem)) {
     return <ForbiddenPage />;
   }
@@ -94,7 +95,7 @@ function AppPage({ navItemId, children }: AppPageProps) {
   return <AppShell>{children}</AppShell>;
 }
 
-/** A guardian can open an authorized beneficiary link without receiving the people navigation. */
+/** Un guardián puede abrir un enlace de beneficiario autorizado sin recibir la navegación de personas. */
 function BeneficiarioDirectPage() {
   const { user } = useAuth();
   const personasItem = getNavItemById("personas");
@@ -108,9 +109,7 @@ function BeneficiarioDirectPage() {
   }
 
   return (
-    <AppShell>
       <BeneficiarioDetailPage />
-    </AppShell>
   );
 }
 
@@ -221,14 +220,6 @@ function App() {
         }
       />
       <Route
-        path="/app/personas/beneficiarios/:beneficiarioId"
-        element={
-          <RequireAuth>
-            <BeneficiarioDirectPage />
-          </RequireAuth>
-        }
-      />
-      <Route
         path="/app/grupos/:grupoId"
         element={
           <RequireAuth>
@@ -249,6 +240,12 @@ function App() {
         }
       >
         <Route index element={<Navigate to="beneficiarios" replace />} />
+        <Route
+          path="beneficiarios/:beneficiarioId"
+          element={
+              <BeneficiarioDirectPage />
+          }
+        />
         <Route path="adultos" element={<AdultosPage />} />
         <Route path="adultos/:adultoId" element={<AdultoDetailPage />} />
         <Route

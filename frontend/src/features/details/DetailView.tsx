@@ -129,7 +129,7 @@ export function DetailView({
   }
   return (
     <section className="home-feed detail-page" aria-labelledby="detail-title">
-      <Link className="grupos-back-link" to={backTo}>
+      <Link className=" grupos-back-link" to={backTo}>
         Volver a {backLabel}
       </Link>
       <article className="home-card detail-card">

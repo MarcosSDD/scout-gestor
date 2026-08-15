@@ -5,6 +5,8 @@ import { toast } from "react-toastify";
 import { useAuth } from "../features/auth/useAuth";
 import { AppHeader } from "./AppHeader";
 import { MobileBottomNav } from "./MobileBottomNav";
+import { MobileSearchOverlay } from './MobileSearchOverlay'
+import { RightPanel } from './RightPanel'
 import { Sidebar } from "./Sidebar";
 
 export function AppShell({ children }: PropsWithChildren) {
@@ -12,6 +14,9 @@ export function AppShell({ children }: PropsWithChildren) {
   const location = useLocation();
   const { user, logout } = useAuth();
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [isRightPanelOpen, setIsRightPanelOpen] = useState(false)
+  const [isSearchOpen, setIsSearchOpen] = useState(false)
+
   const mainRef = useRef<HTMLElement>(null);
 
   useEffect(() => {
@@ -33,23 +38,25 @@ export function AppShell({ children }: PropsWithChildren) {
         user={user}
         onMenuClick={() => setIsSidebarOpen((current) => !current)}
         isMenuOpen={isSidebarOpen}
+        onSearchClick={() => setIsSearchOpen(true)}
+        onRightPanelClick={() => setIsRightPanelOpen((current) => !current)}
+
       />
       <Sidebar
         isOpen={isSidebarOpen}
         onClose={() => setIsSidebarOpen(false)}
         onLogout={handleLogout}
       />
-      <main
-        ref={mainRef}
-        id="main-content"
-        className="shell-main"
-        tabIndex={-1}
-      >
-        <div className="shell-main__bottom">
+      <main className={`shell-main ${isRightPanelOpen ? 'right-chat-active' : ''}`}>
+        <div className="shell-main__bottom">  
           <div className="shell-main__left">{children}</div>
         </div>
       </main>
+      <RightPanel isOpen={isRightPanelOpen} />
+
       <MobileBottomNav />
+      <MobileSearchOverlay isOpen={isSearchOpen} onClose={() => setIsSearchOpen(false)} />
+
     </div>
   );
 }
