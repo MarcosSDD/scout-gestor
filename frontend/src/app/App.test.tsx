@@ -23,7 +23,14 @@ vi.mock('../features/grupos/GrupoDetailPage', () => ({
   GrupoDetailPage: () => <><h1>Grupo detalle</h1><p>Estructura visible mock</p></>,
 }))
 
-vi.mock('../features/personas/PersonasLayout', () => ({ PersonasLayout: () => <Outlet /> }))
+vi.mock('../features/personas/PersonasLayout', () => ({
+  PersonasLayout: ({ showSubnav = true }: { showSubnav?: boolean }) => (
+    <>
+      {showSubnav ? <nav aria-label="Tipos de personas">Subnavegación de personas</nav> : null}
+      <Outlet />
+    </>
+  ),
+}))
 vi.mock('../features/personas/PersonasPages', () => ({
     AdultosPage: () => <h1>Guías y Dirigentes</h1>, BeneficiariosPage: () => <h1>Beneficiarios</h1>, ApoderadosPage: () => <h1>Apoderados</h1>,
 }))
@@ -211,6 +218,22 @@ describe('App', () => {
 
     expect(screen.getByRole('heading', { name: 'Ficha autorizada mock' })).toBeInTheDocument()
     expect(screen.queryByRole('link', { name: /personas/i })).not.toBeInTheDocument()
+    expect(screen.queryByLabelText('Tipos de personas')).not.toBeInTheDocument()
+  })
+
+  it('renders an administrative beneficiary detail inside one application shell', () => {
+    render(
+      withAuth(
+        <MemoryRouter initialEntries={['/app/personas/beneficiarios/42']}>
+          <App />
+        </MemoryRouter>,
+        authValue({ status: 'authenticated', user: adminUser, isAuthenticated: true }),
+      ),
+    )
+
+    expect(screen.getByRole('heading', { name: 'Ficha autorizada mock' })).toBeInTheDocument()
+    expect(screen.getAllByRole('main')).toHaveLength(1)
+    expect(screen.getByLabelText('Tipos de personas')).toBeInTheDocument()
   })
 
   it('renders forbidden page', () => {

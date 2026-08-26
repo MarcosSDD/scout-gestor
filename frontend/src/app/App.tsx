@@ -1,5 +1,5 @@
 import { lazy, Suspense, type ReactNode } from "react";
-import { Navigate, Route, Routes } from "react-router-dom";
+import { Navigate, Route, Routes, useMatch } from "react-router-dom";
 
 import { AppShell } from "../app-shell/AppShell";
 import {
@@ -95,21 +95,28 @@ function AppPage({ navItemId, children }: AppPageProps) {
   return <AppShell>{children}</AppShell>;
 }
 
-/** Un guardián puede abrir un enlace de beneficiario autorizado sin recibir la navegación de personas. */
-function BeneficiarioDirectPage() {
+/**
+ * Shares the application shell for every people route while keeping guardian
+ * access limited to a directly authorized beneficiary record.
+ */
+function PersonasPage() {
   const { user } = useAuth();
   const personasItem = getNavItemById("personas");
+  const canManagePersonas = Boolean(
+    personasItem && canSeeNavItem(user, personasItem),
+  );
+  const isDirectBeneficiarioRoute = useMatch(
+    "/app/personas/beneficiarios/:beneficiarioId",
+  );
 
-  if (
-    !user ||
-    (!user.is_apoderado &&
-      (!personasItem || !canSeeNavItem(user, personasItem)))
-  ) {
+  if (!user || (!canManagePersonas && (!user.is_apoderado || !isDirectBeneficiarioRoute))) {
     return <ForbiddenPage />;
   }
 
   return (
-      <BeneficiarioDetailPage />
+    <AppShell>
+      <PersonasLayout showSubnav={canManagePersonas} />
+    </AppShell>
   );
 }
 
@@ -233,18 +240,14 @@ function App() {
         path="/app/personas"
         element={
           <RequireAuth>
-            <AppPage navItemId="personas">
-              <PersonasLayout />
-            </AppPage>
+            <PersonasPage />
           </RequireAuth>
         }
       >
         <Route index element={<Navigate to="beneficiarios" replace />} />
         <Route
           path="beneficiarios/:beneficiarioId"
-          element={
-              <BeneficiarioDirectPage />
-          }
+          element={<BeneficiarioDetailPage />}
         />
         <Route path="adultos" element={<AdultosPage />} />
         <Route path="adultos/:adultoId" element={<AdultoDetailPage />} />

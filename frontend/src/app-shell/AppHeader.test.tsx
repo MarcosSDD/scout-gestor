@@ -24,7 +24,13 @@ function user(overrides: Partial<AuthUser> = {}): AuthUser {
 function renderHeader(authUser: AuthUser) {
   return render(
     <MemoryRouter>
-      <AppHeader user={authUser} onMenuClick={vi.fn()} isMenuOpen={false} />
+      <AppHeader
+        user={authUser}
+        onMenuClick={vi.fn()}
+        isMenuOpen={false}
+        onSearchClick={vi.fn()}
+        onRightPanelClick={vi.fn()}
+      />
     </MemoryRouter>,
   )
 }
@@ -44,10 +50,12 @@ describe('AppHeader', () => {
     expect(screen.getByRole('link', { name: /perfil responsable1/i })).toHaveAttribute('href', '/app/perfil')
   })
 
-  it('does not render controls that have no backend capability', () => {
+  it('renders the common header controls for authenticated users', () => {
     renderHeader(user())
 
-    expect(screen.queryByRole('search')).not.toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: /notificaciones|configuracion|busqueda/i })).not.toBeInTheDocument()
+    expect(screen.getByRole('search')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Notificaciones' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Configuracion' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Abrir busqueda' })).toBeInTheDocument()
   })
 })

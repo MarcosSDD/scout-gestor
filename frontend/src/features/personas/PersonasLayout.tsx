@@ -6,16 +6,22 @@ const links = [
   { to: "/app/personas/adultos", label: "Guías y Dirigentes" },
 ];
 
-export function PersonasLayout() {
+type PersonasLayoutProps = {
+  showSubnav?: boolean;
+};
+
+export function PersonasLayout({ showSubnav = true }: PersonasLayoutProps) {
   return (
     <>
-      <nav className="persona-subnav" aria-label="Tipos de personas">
-        {links.map((link) => (
-          <NavLink key={link.to} to={link.to}>
-            {link.label}
-          </NavLink>
-        ))}
-      </nav>
+      {showSubnav ? (
+        <nav className="persona-subnav" aria-label="Tipos de personas">
+          {links.map((link) => (
+            <NavLink key={link.to} to={link.to}>
+              {link.label}
+            </NavLink>
+          ))}
+        </nav>
+      ) : null}
       <Outlet />
     </>
   );

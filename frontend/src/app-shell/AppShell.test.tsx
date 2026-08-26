@@ -39,7 +39,7 @@ describe('AppShell', () => {
     expect(screen.getByRole('link', { name: 'We Lemu inicio' })).toBeInTheDocument()
     expect(screen.getByLabelText('Acciones de usuario')).toBeInTheDocument()
     expect(screen.getByLabelText('Navegacion principal')).toBeInTheDocument()
-    expect(screen.queryByLabelText('Actividad y alertas')).not.toBeInTheDocument()
+    expect(screen.getByLabelText('Actividad y alertas')).toBeInTheDocument()
     expect(screen.getByLabelText('Navegacion movil')).toBeInTheDocument()
     expect(screen.getByText('Shell content')).toBeInTheDocument()
     expect(screen.getByRole('link', { name: 'Saltar al contenido principal' })).toHaveAttribute('href', '#main-content')

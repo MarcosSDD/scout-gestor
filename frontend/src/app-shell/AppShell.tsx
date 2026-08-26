@@ -47,7 +47,12 @@ export function AppShell({ children }: PropsWithChildren) {
         onClose={() => setIsSidebarOpen(false)}
         onLogout={handleLogout}
       />
-      <main className={`shell-main ${isRightPanelOpen ? 'right-chat-active' : ''}`}>
+      <main
+        ref={mainRef}
+        id="main-content"
+        className={`shell-main ${isRightPanelOpen ? 'right-chat-active' : ''}`}
+        tabIndex={-1}
+      >
         <div className="shell-main__bottom">  
           <div className="shell-main__left">{children}</div>
         </div>
